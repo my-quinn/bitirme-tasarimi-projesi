@@ -12,6 +12,11 @@ from struct_design import (
 from slab_model import SlabSystem, Slab, color_for_id, clamp, rect_normalize
 from dxf_out import export_to_dxf
 
+# Yeni modüller - hesap ve raporlama
+from oneway_slab import compute_oneway_report
+from twoway_slab import compute_twoway_report
+from balcony_slab import compute_balcony_report
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -268,237 +273,43 @@ class App(tk.Tk):
             try:
                 design_res = {}
                 if s.kind == "ONEWAY":
+                    # Moment hesabı
                     res, steps = self.system.compute_oneway_per_slab(sid, bw)
-                    for l in steps: self.output.insert("end", l+"\n")
+                    for l in steps:
+                        self.output.insert("end", l + "\n")
                     
-                    Mpos = res["Mpos_max"] or 0.0
-                    Mneg = res["Mneg_min"] or 0.0
-                    smax = oneway_smax_main(h)
-                    d_mm = h - cover  # efektif derinlik
-                    
-                    # Kenar süreklilik analizi - TÜM 4 KENAR BAĞIMSIZ KONTROL
-                    chain = res.get("chain", [sid])
-                    auto_dir = res.get("auto_dir", "X")
-                    
-                    # Tüm kenarların komşuluk durumunu al
-                    # (Lf, Rf, Tf, Bf) = (Left_full, Right_full, Top_full, Bottom_full)
-                    (Lf, Rf, Tf, Bf), (La, Ra, Ta, Ba), _ = self.system.twoway_edge_continuity_full(sid)
-                    
-                    # Her kenardaki süreklilik durumu (komşu döşeme var mı?)
-                    kenar_L_surekli = Lf or La  # Sol kenarda herhangi bir komşu var mı
-                    kenar_R_surekli = Rf or Ra  # Sağ kenarda herhangi bir komşu var mı
-                    kenar_T_surekli = Tf or Ta  # Üst kenarda herhangi bir komşu var mı
-                    kenar_B_surekli = Bf or Ba  # Alt kenarda herhangi bir komşu var mı
-                    
-                    self.output.insert("end", f"\n  Kenar Süreklilik Durumu:\n")
-                    self.output.insert("end", f"    Sol (L): {'Sürekli' if kenar_L_surekli else 'Süreksiz'}\n")
-                    self.output.insert("end", f"    Sağ (R): {'Sürekli' if kenar_R_surekli else 'Süreksiz'}\n")
-                    self.output.insert("end", f"    Üst (T): {'Sürekli' if kenar_T_surekli else 'Süreksiz'}\n")
-                    self.output.insert("end", f"    Alt (B): {'Sürekli' if kenar_B_surekli else 'Süreksiz'}\n")
-                    
-                    # Ana donatı doğrultusuna göre kenar sınıflandırması
-                    # auto_dir = "X" → Ana donatı X yönünde → Mesnetler L ve R'de
-                    # auto_dir = "Y" → Ana donatı Y yönünde → Mesnetler T ve B'de
-                    if auto_dir == "X":
-                        # Span X doğrultusunda: L ve R mesnet kenarları (kısa kenar)
-                        # T ve B yan kenarlar (uzun kenar)
-                        kisa_kenar_start_surekli = kenar_L_surekli
-                        kisa_kenar_end_surekli = kenar_R_surekli
-                        uzun_kenar_start_surekli = kenar_T_surekli
-                        uzun_kenar_end_surekli = kenar_B_surekli
-                    else:
-                        # Span Y doğrultusunda: T ve B mesnet kenarları (kısa kenar)
-                        # L ve R yan kenarlar (uzun kenar)
-                        kisa_kenar_start_surekli = kenar_T_surekli
-                        kisa_kenar_end_surekli = kenar_B_surekli
-                        uzun_kenar_start_surekli = kenar_L_surekli
-                        uzun_kenar_end_surekli = kenar_R_surekli
-                    
-                    # --- 1. ANA DONATI (Main Reinforcement) ---
-                    # Mpos'tan hesaplanır, yarısı pilye yarısı düz
-                    self.output.insert("end", "\n  === 1. ANA DONATI ===\n")
-                    As_main, ch_main, st_main = self.system.design_main_rebar_from_M(
-                        Mpos, conc, steel, h, cover, smax, label_prefix="    ")
-                    for l in st_main: self.output.insert("end", l+"\n")
-                    
-                    duz, pilye = split_duz_pilye(ch_main)
-                    self.output.insert("end", f"    Ana Donatı: {ch_main.label_with_area()}\n")
-                    self.output.insert("end", f"    -> Düz: {duz.label()} (A={duz.area_mm2_per_m:.1f} mm²/m)\n")
-                    self.output.insert("end", f"    -> Pilye: {pilye.label()} (A={pilye.area_mm2_per_m:.1f} mm²/m)\n")
-                    
-                    # --- 2. DAĞITMA DONATISI (Distribution Reinforcement) ---
-                    # Ana donatı alanı / 5
-                    self.output.insert("end", "\n  === 2. DAĞITMA DONATISI ===\n")
-                    As_dist_req = ch_main.area_mm2_per_m / 5.0
-                    self.output.insert("end", f"    As_dağıtma = As_ana / 5 = {ch_main.area_mm2_per_m:.1f} / 5 = {As_dist_req:.1f} mm²/m\n")
-                    ch_dist = select_rebar_min_area(As_dist_req, oneway_smax_dist(), phi_min=8)
-                    if ch_dist:
-                        self.output.insert("end", f"    Seçim: {ch_dist.label_with_area()}\n")
-                    else:
-                        self.output.insert("end", "    HATA: Dağıtma donatısı seçilemedi!\n")
-                    
-                    # Minimum donatı hesabı (kenar donatıları için)
-                    rho_min = rho_min_oneway(steel)
-                    As_min = rho_min * 1000.0 * d_mm  # mm²/m
-                    
-                    # --- 3. SÜREKSİZ KISA KENAR: BOYUNA KENAR MESNET DONATISI ---
-                    # Dağıtma doğrultusunda, minAs değeri kullanılır
-                    ch_kenar_start = None
-                    ch_kenar_end = None
-                    
-                    self.output.insert("end", "\n  === 3. SÜREKSİZ KISA KENAR: BOYUNA KENAR MESNET DONATISI ===\n")
-                    self.output.insert("end", f"    ρ_min = {rho_min:.4f}, As_min = {As_min:.1f} mm²/m\n")
-                    
-                    if not kisa_kenar_start_surekli:
-                        self.output.insert("end", f"    Kısa kenar START süreksiz -> Boyuna kenar donatısı gerekli\n")
-                        ch_kenar_start = select_rebar_min_area(As_min, smax, phi_min=8)
-                        if ch_kenar_start:
-                            self.output.insert("end", f"    Seçim (START): {ch_kenar_start.label_with_area()}\n")
-                    else:
-                        self.output.insert("end", f"    Kısa kenar START sürekli -> Boyuna kenar donatısı gerekmiyor\n")
-                    
-                    if not kisa_kenar_end_surekli:
-                        self.output.insert("end", f"    Kısa kenar END süreksiz -> Boyuna kenar donatısı gerekli\n")
-                        ch_kenar_end = select_rebar_min_area(As_min, smax, phi_min=8)
-                        if ch_kenar_end:
-                            self.output.insert("end", f"    Seçim (END): {ch_kenar_end.label_with_area()}\n")
-                    else:
-                        self.output.insert("end", f"    Kısa kenar END sürekli -> Boyuna kenar donatısı gerekmiyor\n")
-                    
-                    # --- 4. SÜREKLİ KISA KENAR: BOYUNA İÇ MESNET DONATISI ---
-                    # Dağıtma doğrultusunda, 0.6×As
-                    ch_ic_mesnet_start = None
-                    ch_ic_mesnet_end = None
-                    
-                    self.output.insert("end", "\n  === 4. SÜREKLİ KISA KENAR: BOYUNA İÇ MESNET DONATISI ===\n")
-                    As_ic_mesnet = ch_main.area_mm2_per_m * 0.6
-                    self.output.insert("end", f"    As_iç_mesnet = As_ana × 0.6 = {ch_main.area_mm2_per_m:.1f} × 0.6 = {As_ic_mesnet:.1f} mm²/m\n")
-                    
-                    if kisa_kenar_start_surekli:
-                        self.output.insert("end", f"    Kısa kenar START sürekli -> Boyuna iç mesnet donatısı gerekli\n")
-                        ch_ic_mesnet_start = select_rebar_min_area(As_ic_mesnet, smax, phi_min=8)
-                        if ch_ic_mesnet_start:
-                            self.output.insert("end", f"    Seçim (START): {ch_ic_mesnet_start.label_with_area()}\n")
-                    else:
-                        self.output.insert("end", f"    Kısa kenar START süreksiz -> İç mesnet donatısı gerekmiyor\n")
-                    
-                    if kisa_kenar_end_surekli:
-                        self.output.insert("end", f"    Kısa kenar END sürekli -> Boyuna iç mesnet donatısı gerekli\n")
-                        ch_ic_mesnet_end = select_rebar_min_area(As_ic_mesnet, smax, phi_min=8)
-                        if ch_ic_mesnet_end:
-                            self.output.insert("end", f"    Seçim (END): {ch_ic_mesnet_end.label_with_area()}\n")
-                    else:
-                        self.output.insert("end", f"    Kısa kenar END süreksiz -> İç mesnet donatısı gerekmiyor\n")
-                    
-                    # --- 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI ---
-                    # Ana donatı doğrultusunda, pilye yetmezse ek donatı
-                    ch_mesnet_ek_start = None
-                    ch_mesnet_ek_end = None
-                    
-                    self.output.insert("end", "\n  === 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI ===\n")
-                    As_mesnet_req = As_main
-                    As_pilye = pilye.area_mm2_per_m
-                    As_ek_req = max(0, As_mesnet_req - As_pilye)
-                    self.output.insert("end", f"    As_mesnet = As_ana = {As_mesnet_req:.1f} mm²/m\n")
-                    self.output.insert("end", f"    As_pilye (mevcut) = {As_pilye:.1f} mm²/m\n")
-                    self.output.insert("end", f"    As_ek = max(0, {As_mesnet_req:.1f} - {As_pilye:.1f}) = {As_ek_req:.1f} mm²/m\n")
-                    
-                    if uzun_kenar_start_surekli:
-                        self.output.insert("end", f"    Uzun kenar START sürekli -> Mesnet ek donatısı kontrolü\n")
-                        if As_ek_req > 1e-6:
-                            ch_mesnet_ek_start = select_rebar_min_area(As_ek_req, smax, phi_min=8)
-                            if ch_mesnet_ek_start:
-                                self.output.insert("end", f"    Seçim (START): {ch_mesnet_ek_start.label_with_area()}\n")
-                        else:
-                            self.output.insert("end", f"    Pilye yeterli, ek donatı gerekmiyor (START)\n")
-                    else:
-                        self.output.insert("end", f"    Uzun kenar START süreksiz -> Mesnet ek donatısı gerekmiyor\n")
-                    
-                    if uzun_kenar_end_surekli:
-                        self.output.insert("end", f"    Uzun kenar END sürekli -> Mesnet ek donatısı kontrolü\n")
-                        if As_ek_req > 1e-6:
-                            ch_mesnet_ek_end = select_rebar_min_area(As_ek_req, smax, phi_min=8)
-                            if ch_mesnet_ek_end:
-                                self.output.insert("end", f"    Seçim (END): {ch_mesnet_ek_end.label_with_area()}\n")
-                        else:
-                            self.output.insert("end", f"    Pilye yeterli, ek donatı gerekmiyor (END)\n")
-                    else:
-                        self.output.insert("end", f"    Uzun kenar END süreksiz -> Mesnet ek donatısı gerekmiyor\n")
-                    
-                    # --- ÖZET ---
-                    self.output.insert("end", "\n  === ÖZET ===\n")
-                    self.output.insert("end", f"    Ana (Düz): {duz.label()}\n")
-                    self.output.insert("end", f"    Ana (Pilye): {pilye.label()}\n")
-                    self.output.insert("end", f"    Dağıtma: {ch_dist.label() if ch_dist else '-'}\n")
-                    self.output.insert("end", f"    Boyuna Kenar Mesnet (süreksiz kısa): START={ch_kenar_start.label() if ch_kenar_start else '-'}, END={ch_kenar_end.label() if ch_kenar_end else '-'}\n")
-                    self.output.insert("end", f"    Boyuna İç Mesnet (sürekli kısa): START={ch_ic_mesnet_start.label() if ch_ic_mesnet_start else '-'}, END={ch_ic_mesnet_end.label() if ch_ic_mesnet_end else '-'}\n")
-                    self.output.insert("end", f"    Mesnet Ek (sürekli uzun): START={ch_mesnet_ek_start.label() if ch_mesnet_ek_start else '-'}, END={ch_mesnet_ek_end.label() if ch_mesnet_ek_end else '-'}\n\n")
-
-                    design_res = {
-                        "kind": "ONEWAY", "auto_dir": res.get("auto_dir"), "cover_mm": cover,
-                        "choices": {
-                            "main": ch_main, 
-                            "duz": duz,
-                            "pilye": pilye,
-                            "dist": ch_dist, 
-                            "kenar_mesnet_start": ch_kenar_start,
-                            "kenar_mesnet_end": ch_kenar_end,
-                            "ic_mesnet_start": ch_ic_mesnet_start,
-                            "ic_mesnet_end": ch_ic_mesnet_end,
-                            "mesnet_ek_start": ch_mesnet_ek_start,
-                            "mesnet_ek_end": ch_mesnet_ek_end
-                        },
-                        "edge_continuity": {
-                            "uzun_start": uzun_kenar_start_surekli,
-                            "uzun_end": uzun_kenar_end_surekli,
-                            "kisa_start": kisa_kenar_start_surekli,
-                            "kisa_end": kisa_kenar_end_surekli
-                        }
-                    }
+                    # Donatı hesabı ve raporlama (oneway_slab modülünden)
+                    design_res, report_lines = compute_oneway_report(
+                        self.system, sid, res, conc, steel, h, cover, bw
+                    )
+                    for l in report_lines:
+                        self.output.insert("end", l + "\n")
 
                 elif s.kind == "TWOWAY":
+                    # Moment hesabı
                     res, steps = self.system.compute_twoway_per_slab(sid, bw)
-                    for l in steps: self.output.insert("end", l+"\n")
+                    for l in steps:
+                        self.output.insert("end", l + "\n")
                     
-                    mxn, mxp = res["Mx"]
-                    myn, myp = res["My"]
-                    
-                    smax_x = twoway_smax_short(h) if res["short_dir"]=="X" else twoway_smax_long(h)
-                    smax_y = twoway_smax_long(h) if res["short_dir"]=="X" else twoway_smax_short(h)
-                    
-                    asx, ch_x, _ = self.system.design_main_rebar_from_M(mxp or 0, conc, steel, h, cover, smax_x, label_prefix="  X: ")
-                    asy, ch_y, _ = self.system.design_main_rebar_from_M(myp or 0, conc, steel, h, cover, smax_y, label_prefix="  Y: ")
-                    
-                    asxn, ch_xn, _ = self.system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="  Xneg: ")
-                    asyn, ch_yn, _ = self.system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="  Yneg: ")
-
-                    ch_x_il = select_rebar_min_area(max(0, ch_xn.area_mm2_per_m - ch_x.area_mm2_per_m), 330)
-                    ch_y_il = select_rebar_min_area(max(0, ch_yn.area_mm2_per_m - ch_y.area_mm2_per_m), 330)
-
-                    design_res = {
-                        "kind": "TWOWAY", "short_dir": res["short_dir"], "cover_mm": cover,
-                        "choices": {"x_span": ch_x, "y_span": ch_y, "x_support_extra": ch_x_il, "y_support_extra": ch_y_il}
-                    }
-                    self.output.insert("end", f"  X: {ch_x.label()} | Y: {ch_y.label()}\n\n")
+                    # Donatı hesabı ve raporlama (twoway_slab modülünden)
+                    design_res, report_lines = compute_twoway_report(
+                        self.system, sid, res, conc, steel, h, cover, bw
+                    )
+                    for l in report_lines:
+                        self.output.insert("end", l + "\n")
 
                 elif s.kind == "BALCONY":
+                    # Moment hesabı
                     res, steps = self.system.compute_balcony_per_slab(sid, bw)
-                    for l in steps: self.output.insert("end", l+"\n")
+                    for l in steps:
+                        self.output.insert("end", l + "\n")
                     
-                    Mdes, std = self.system.get_balcony_design_moment(sid, res["Mneg"], bw)
-                    for l in std: self.output.insert("end", l+"\n")
-                    
-                    asb, ch_main, _ = self.system.design_main_rebar_from_M(Mdes, conc, steel, h, cover, oneway_smax_main(h), label_prefix="  ")
-                    asd = ch_main.area_mm2_per_m / 5.0
-                    ch_dist = select_rebar_min_area(asd, oneway_smax_dist(), phi_min=8)
-                    
-                    fixed, _ = self.system.balcony_fixed_edge_guess(sid)
-                    
-                    design_res = {
-                        "kind": "BALCONY", "cover_mm": cover, "fixed_edge": fixed,
-                        "choices": {"main": ch_main, "dist": ch_dist}
-                    }
-                    self.output.insert("end", f"  Seçim: {ch_main.label()}\n\n")
+                    # Donatı hesabı ve raporlama (balcony_slab modülünden)
+                    design_res, report_lines = compute_balcony_report(
+                        self.system, sid, res, conc, steel, h, cover, bw
+                    )
+                    for l in report_lines:
+                        self.output.insert("end", l + "\n")
 
                 self.last_design[sid] = design_res
 
