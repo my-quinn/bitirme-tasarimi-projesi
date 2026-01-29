@@ -266,8 +266,22 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
         uzun_kenar_start_surekli = kenar_L_surekli
         uzun_kenar_end_surekli = kenar_R_surekli
     
+    # Doğrultu belirleme
+    # X yönü: Lx < Ly -> kısa kenar Y eksenine paralel, uzun kenar X eksenine paralel
+    # Y yönü: Ly < Lx -> kısa kenar X eksenine paralel, uzun kenar Y eksenine paralel
+    if auto_dir == "X":
+        kisa_kenar_dogrultusu = "Y ekseni (dik)"
+        uzun_kenar_dogrultusu = "X ekseni (yatay)"
+    else:
+        kisa_kenar_dogrultusu = "X ekseni (yatay)"
+        uzun_kenar_dogrultusu = "Y ekseni (dik)"
+    
+    lines.append(f"\n  Doğrultu Bilgisi: Kısa kenar = {kisa_kenar_dogrultusu}, Uzun kenar = {uzun_kenar_dogrultusu}")
+    
     # --- 1. ANA DONATI ---
+    # Ana donatı kısa kenara paralel atılır
     lines.append("\n  === 1. ANA DONATI ===")
+    lines.append(f"    (Doğrultu: Kısa kenara paralel -> {kisa_kenar_dogrultusu})")
     As_main, ch_main, st_main = system.design_main_rebar_from_M(
         Mpos, conc, steel, h, cover, smax, label_prefix="    ")
     lines.extend(st_main)
@@ -278,7 +292,9 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     lines.append(f"    -> Pilye: {pilye.label()} (A={pilye.area_mm2_per_m:.1f} mm²/m)")
     
     # --- 2. DAĞITMA DONATISI ---
+    # Dağıtma donatısı uzun kenara paralel atılır
     lines.append("\n  === 2. DAĞITMA DONATISI ===")
+    lines.append(f"    (Doğrultu: Uzun kenara paralel -> {uzun_kenar_dogrultusu})")
     As_dist_req = ch_main.area_mm2_per_m / 5.0
     lines.append(f"    As_dağıtma = As_ana / 5 = {ch_main.area_mm2_per_m:.1f} / 5 = {As_dist_req:.1f} mm²/m")
     ch_dist = select_rebar_min_area(As_dist_req, oneway_smax_dist(), phi_min=8)
@@ -292,10 +308,12 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     As_min = rho_min * 1000.0 * d_mm
     
     # --- 3. SÜREKSİZ KISA KENAR: BOYUNA KENAR MESNET DONATISI ---
+    # Boyuna kenar mesnet donatısı uzun kenara paralel atılır
     ch_kenar_start = None
     ch_kenar_end = None
     
     lines.append("\n  === 3. SÜREKSİZ KISA KENAR: BOYUNA KENAR MESNET DONATISI ===")
+    lines.append(f"    (Doğrultu: Uzun kenara paralel -> {uzun_kenar_dogrultusu})")
     lines.append(f"    ρ_min = {rho_min:.4f}, As_min = {As_min:.1f} mm²/m")
     
     if not kisa_kenar_start_surekli:
@@ -315,10 +333,12 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
         lines.append("    Kısa kenar END sürekli -> Boyuna kenar donatısı gerekmiyor")
     
     # --- 4. SÜREKLİ KISA KENAR: BOYUNA İÇ MESNET DONATISI ---
+    # Boyuna iç mesnet donatısı uzun kenara paralel atılır
     ch_ic_mesnet_start = None
     ch_ic_mesnet_end = None
     
     lines.append("\n  === 4. SÜREKLİ KISA KENAR: BOYUNA İÇ MESNET DONATISI ===")
+    lines.append(f"    (Doğrultu: Uzun kenara paralel -> {uzun_kenar_dogrultusu})")
     As_ic_mesnet = ch_main.area_mm2_per_m * 0.6
     lines.append(f"    As_iç_mesnet = As_ana × 0.6 = {ch_main.area_mm2_per_m:.1f} × 0.6 = {As_ic_mesnet:.1f} mm²/m")
     
@@ -338,11 +358,13 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     else:
         lines.append("    Kısa kenar END süreksiz -> İç mesnet donatısı gerekmiyor")
     
-    # --- 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI ---
+    # --- 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI (İLAVE MESNET DONATISI) ---
+    # İlave mesnet donatısı kısa kenara paralel atılır
     ch_mesnet_ek_start = None
     ch_mesnet_ek_end = None
     
-    lines.append("\n  === 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI ===")
+    lines.append("\n  === 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI (İLAVE) ===")
+    lines.append(f"    (Doğrultu: Kısa kenara paralel -> {kisa_kenar_dogrultusu})")
     As_mesnet_req = As_main
     As_pilye = pilye.area_mm2_per_m
     As_ek_req = max(0, As_mesnet_req - As_pilye)
@@ -401,6 +423,13 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
             "uzun_end": uzun_kenar_end_surekli,
             "kisa_start": kisa_kenar_start_surekli,
             "kisa_end": kisa_kenar_end_surekli
+        },
+        "dogrultular": {
+            "ana_donati": kisa_kenar_dogrultusu,           # kısa kenara paralel
+            "dagitma": uzun_kenar_dogrultusu,              # uzun kenara paralel
+            "boyuna_kenar_mesnet": uzun_kenar_dogrultusu,  # uzun kenara paralel
+            "boyuna_ic_mesnet": uzun_kenar_dogrultusu,     # uzun kenara paralel
+            "ilave_mesnet": kisa_kenar_dogrultusu          # kısa kenara paralel
         }
     }
     
