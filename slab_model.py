@@ -287,8 +287,8 @@ class SlabSystem:
         steps.append(f"w = pd*b = {s0.pd:.3f}*{s0.b:.3f} = {w:.3f} kN/m")
 
         Lx_g, Ly_g = s0.size_m_gross()
-        direction = "X" if Lx_g <= Ly_g else "Y"
-        steps.append(f"Otomatik açıklık yönü (kısa): Lx={Lx_g:.3f}, Ly={Ly_g:.3f} -> yön={direction}")
+        direction = "Y" if Lx_g < Ly_g else "X"
+        steps.append(f"Otomatik açıklık yönü: Lx={Lx_g:.3f}, Ly={Ly_g:.3f} -> yön={direction}")
 
         chain = self.build_oneway_chain(sid, direction)
         steps.append(f"Zincir: {chain}")
@@ -315,14 +315,15 @@ class SlabSystem:
             mid_g = 0.5 * (a + b_g)
             owner = self.owner_slab_for_segment(chain, direction, mid_g)
             s_owner = self.slabs[owner]
-            step = s_owner.dx if direction == "X" else s_owner.dy
-            Lgross = (b_g - a) * step
+            # Kısa açıklık uzunluğunu kullan (taşıma doğrultusu)
+            Lx_owner, Ly_owner = s_owner.size_m_gross()
+            L_short = min(Lx_owner, Ly_owner)
             left_is_beam = self.is_beam_gridline_for_slab(owner, direction, a)
             right_is_beam = self.is_beam_gridline_for_slab(owner, direction, b_g)
-            Lnet = self.net_span(Lgross, left_is_beam, right_is_beam, bw_val)
-            # Tek doğrultuda brüt açıklık üzerinden hesap yapılıyor
-            spans.append((Lgross, owner, Lnet))
-            steps.append(f"Span [{a}->{b_g}] owner={owner}: Lgross={Lgross:.3f} (hesapta kullanılan), Lnet={Lnet:.3f}")
+            Lnet = self.net_span(L_short, left_is_beam, right_is_beam, bw_val)
+            # Tek doğrultuda her zaman kısa açıklık üzerinden hesap yapılıyor
+            spans.append((L_short, owner, Lnet))
+            steps.append(f"Span [{a}->{b_g}] owner={owner}: L_short={L_short:.3f} (hesapta kullanılan), Lnet={Lnet:.3f}")
 
         n_spans = len(spans)
         steps.append(f"Toplam span: {n_spans}")
@@ -458,7 +459,7 @@ class SlabSystem:
         s = self.slabs[sid]
         w = s.pd * s.b
         Lx_g, Ly_g = s.size_m_gross()
-        direction = "X" if Lx_g <= Ly_g else "Y"
+        direction = "Y" if Lx_g < Ly_g else "X"
         Lg = min(Lx_g, Ly_g)
         Lnet = max(0.05, Lg - 0.5 * bw)
         
