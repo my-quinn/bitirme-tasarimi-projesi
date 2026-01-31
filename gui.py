@@ -266,32 +266,80 @@ class App(tk.Tk):
         
         self.output.insert("end", f"Hesap Raporu\nBeton: {conc}, Çelik: {steel}, h={h}mm, cover={cover}mm\n\n")
         self.last_design = {}
-
+        
+        # ==== İKİ GEÇİŞLİ HESAPLAMA ====
+        # 1. Geçiş: Tüm döşemelerin temel donatılarını hesapla ve pilye alanlarını topla
+        pilye_areas = {}  # {sid: pilye_area_mm2_per_m}
+        moment_results = {}  # {sid: (res, steps)}
+        
+        for sid in sorted(self.system.slabs.keys()):
+            s = self.system.slabs[sid]
+            try:
+                if s.kind == "ONEWAY":
+                    res, steps = self.system.compute_oneway_per_slab(sid, bw)
+                    moment_results[sid] = (res, steps)
+                    # İlk geçişte sadece pilye hesabı için temel donatıyı bul
+                    from oneway_slab import oneway_smax_main
+                    from struct_design import split_duz_pilye, twoway_smax_short
+                    Mpos = res["Mpos_max"] or 0.0
+                    smax = oneway_smax_main(h)
+                    As_main, ch_main, _ = self.system.design_main_rebar_from_M(
+                        Mpos, conc, steel, h, cover, smax, label_prefix="")
+                    _, pilye = split_duz_pilye(ch_main)
+                    pilye_areas[sid] = pilye.area_mm2_per_m
+                elif s.kind == "TWOWAY":
+                    res, steps = self.system.compute_twoway_per_slab(sid, bw)
+                    moment_results[sid] = (res, steps)
+                    # TWOWAY için de pilye hesabı yap
+                    from struct_design import split_duz_pilye, twoway_smax_short, twoway_smax_long
+                    short_dir = res.get("short_dir", "X")
+                    mxn, mxp = res["Mx"]
+                    myn, myp = res["My"]
+                    # Kısa yön donatısı (daha büyük moment)
+                    if short_dir == "X":
+                        Mpos_short = mxp or 0.0
+                        smax_short = twoway_smax_short(h)
+                    else:
+                        Mpos_short = myp or 0.0
+                        smax_short = twoway_smax_short(h)
+                    As_main, ch_main, _ = self.system.design_main_rebar_from_M(
+                        Mpos_short, conc, steel, h, cover, smax_short, label_prefix="")
+                    _, pilye = split_duz_pilye(ch_main)
+                    pilye_areas[sid] = pilye.area_mm2_per_m
+                elif s.kind == "BALCONY":
+                    res, steps = self.system.compute_balcony_per_slab(sid, bw)
+                    moment_results[sid] = (res, steps)
+            except Exception as e:
+                moment_results[sid] = None
+        
+        # 2. Geçiş: Tüm döşemelerin tam donatı hesabını yap (pilye bilgileriyle)
         for sid in sorted(self.system.slabs.keys()):
             s = self.system.slabs[sid]
             self.output.insert("end", f"--- {sid} ({s.kind}) ---\n")
             try:
+                if moment_results.get(sid) is None:
+                    self.output.insert("end", "HATA: Moment hesabı başarısız\n\n")
+                    continue
+                    
+                res, steps = moment_results[sid]
                 design_res = {}
+                
                 if s.kind == "ONEWAY":
-                    # Moment hesabı
-                    res, steps = self.system.compute_oneway_per_slab(sid, bw)
                     for l in steps:
                         self.output.insert("end", l + "\n")
                     
-                    # Donatı hesabı ve raporlama (oneway_slab modülünden)
+                    # Donatı hesabı ve raporlama (komşu pilye alanlarıyla)
                     design_res, report_lines = compute_oneway_report(
-                        self.system, sid, res, conc, steel, h, cover, bw
+                        self.system, sid, res, conc, steel, h, cover, bw,
+                        neighbor_pilye_areas=pilye_areas
                     )
                     for l in report_lines:
                         self.output.insert("end", l + "\n")
 
                 elif s.kind == "TWOWAY":
-                    # Moment hesabı
-                    res, steps = self.system.compute_twoway_per_slab(sid, bw)
                     for l in steps:
                         self.output.insert("end", l + "\n")
                     
-                    # Donatı hesabı ve raporlama (twoway_slab modülünden)
                     design_res, report_lines = compute_twoway_report(
                         self.system, sid, res, conc, steel, h, cover, bw
                     )
@@ -299,12 +347,9 @@ class App(tk.Tk):
                         self.output.insert("end", l + "\n")
 
                 elif s.kind == "BALCONY":
-                    # Moment hesabı
-                    res, steps = self.system.compute_balcony_per_slab(sid, bw)
                     for l in steps:
                         self.output.insert("end", l + "\n")
                     
-                    # Donatı hesabı ve raporlama (balcony_slab modülünden)
                     design_res, report_lines = compute_balcony_report(
                         self.system, sid, res, conc, steel, h, cover, bw
                     )

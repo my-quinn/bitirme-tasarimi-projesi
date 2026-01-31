@@ -72,18 +72,53 @@ def chain_panel_boundary_supports(system, chain: List[str], direction: str) -> L
     return supports
 
 
-def chain_end_fixity(system, chain: List[str], direction: str) -> Tuple[bool, bool]:
+def chain_end_fixity(system, chain: List[str], direction: str) -> Tuple[Tuple[bool, bool], Tuple[bool, bool]]:
     """
-    Zincirin başlangıç ve bitiş uçlarının ankastre/serbest durumunu belirler.
+    Zincirin başlangıç ve bitiş uçlarının ankastre/sürekli durumunu belirler.
+    
+    ONEWAY döşemelerde mesnetlenme koşulu UZUN KENAR komşularına göre belirlenir:
+    - Uzun kenarda TWOWAY komşu varsa → Ankastre (fixed=True)
+    - Uzun kenarda ONEWAY komşu varsa → Sürekli (continuous=True, fixed=False)
+    - Uzun kenarda komşu yoksa → Serbest (fixed=False, continuous=False)
+    
+    Returns:
+        ((fixed_start, fixed_end), (continuous_start, continuous_end))
+        - fixed: Ankastre mi (TWOWAY komşu)
+        - continuous: Sürekli mi (ONEWAY komşu)
     """
     direction = direction.upper()
     first, last = chain[0], chain[-1]
-    start_neigh = system.neighbor_slabs_on_side(first, direction, "START")
-    end_neigh = system.neighbor_slabs_on_side(last, direction, "END")
-    # Herhangi bir döşeme komşusu varsa sürekli kabul et
-    fixed_start = any(n in system.slabs for n in start_neigh)
-    fixed_end = any(n in system.slabs for n in end_neigh)
-    return fixed_start, fixed_end
+    
+    # Uzun kenar yönü (taşıma doğrultusunun tersi)
+    perp_direction = "Y" if direction == "X" else "X"
+    
+    # Uzun kenar komşularını bul
+    start_neigh = system.neighbor_slabs_on_side(first, perp_direction, "START")
+    end_neigh = system.neighbor_slabs_on_side(last, perp_direction, "END")
+    
+    # Başlangıç ucu için kontrol
+    fixed_start = False
+    continuous_start = False
+    for nb in start_neigh:
+        if nb in system.slabs:
+            if system.slabs[nb].kind == "TWOWAY":
+                fixed_start = True  # Ankastre
+                break
+            elif system.slabs[nb].kind in ("ONEWAY", "BALCONY"):
+                continuous_start = True  # Sürekli (sabit mesnet)
+    
+    # Bitiş ucu için kontrol
+    fixed_end = False
+    continuous_end = False
+    for nb in end_neigh:
+        if nb in system.slabs:
+            if system.slabs[nb].kind == "TWOWAY":
+                fixed_end = True  # Ankastre
+                break
+            elif system.slabs[nb].kind in ("ONEWAY", "BALCONY"):
+                continuous_end = True  # Sürekli (sabit mesnet)
+    
+    return (fixed_start, fixed_end), (continuous_start, continuous_end)
 
 
 def owner_slab_for_segment(system, chain: List[str], direction: str, g_mid: float) -> str:
@@ -126,8 +161,10 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
     chain = build_oneway_chain(system, sid, direction)
     steps.append(f"Zincir: {chain}")
 
-    fixed_start, fixed_end = chain_end_fixity(system, chain, direction)
-    steps.append(f"Uç ankastre: START={fixed_start}, END={fixed_end}")
+    (fixed_start, fixed_end), (continuous_start, continuous_end) = chain_end_fixity(system, chain, direction)
+    steps.append(f"Uzun kenar mesnet durumu:")
+    steps.append(f"  START: {'Ankastre (TWOWAY komşu)' if fixed_start else ('Sürekli (ONEWAY/BALCONY komşu)' if continuous_start else 'Serbest')}")
+    steps.append(f"  END: {'Ankastre (TWOWAY komşu)' if fixed_end else ('Sürekli (ONEWAY/BALCONY komşu)' if continuous_end else 'Serbest')}")
 
     if direction == "X":
         start_g = min(system.slabs[x].i0 for x in chain)
@@ -161,7 +198,12 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
     steps.append(f"Toplam span: {n_spans}")
 
     if n_spans == 1:
-        (c_start, c_end), c_pos = one_span_coeff_by_fixity(fixed_start, fixed_end)
+        # Tek açıklık için: fixed veya (fixed olmasa bile continuous) ise ankastre gibi davran
+        # Aslında: fixed = ankastre katsayıları, continuous = sürekli katsayıları (farklı)
+        # Şimdilik: fixed veya continuous ise ankastre katsayısı kullanalım
+        effective_fixed_start = fixed_start or continuous_start
+        effective_fixed_end = fixed_end or continuous_end
+        (c_start, c_end), c_pos = one_span_coeff_by_fixity(effective_fixed_start, effective_fixed_end)
         L = spans[0][0]
         Mpos = c_pos * w * L**2
         Mneg_start = c_start * w * L**2
@@ -170,6 +212,7 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
         return {
             "auto_dir": direction, "chain": chain,
             "fixed_start": fixed_start, "fixed_end": fixed_end,
+            "continuous_start": continuous_start, "continuous_end": continuous_end,
             "w": w, "Mpos_max": Mpos, "Mneg_min": min(Mneg_start, Mneg_end)
         }, steps
 
@@ -211,7 +254,8 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
 
 
 def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str, 
-                          h: float, cover: float, bw: float) -> Tuple[dict, List[str]]:
+                          h: float, cover: float, bw: float,
+                          neighbor_pilye_areas: Optional[Dict[str, float]] = None) -> Tuple[dict, List[str]]:
     """
     Tek doğrultulu döşeme için donatı hesabı ve raporlama yapar.
     
@@ -224,6 +268,7 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
         h: Döşeme kalınlığı (mm)
         cover: Pas payı (mm)
         bw: Kiriş genişliği (m)
+        neighbor_pilye_areas: Komşu döşemelerin pilye alanları {sid: area_mm2_per_m}
     
     Returns:
         (tasarım_sonucu_dict, rapor_satırları_listesi)
@@ -366,16 +411,41 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     lines.append("\n  === 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI (İLAVE) ===")
     lines.append(f"    (Doğrultu: Kısa kenara paralel -> {kisa_kenar_dogrultusu})")
     As_mesnet_req = As_main
-    As_pilye = pilye.area_mm2_per_m
-    As_ek_req = max(0, As_mesnet_req - As_pilye)
+    As_pilye_bu_doseme = pilye.area_mm2_per_m
+    
+    # Komşu döşemelerin pilye alanlarını bul (uzun kenar komşuları)
+    # auto_dir = X ise uzun kenar T/B (Top/Bottom), auto_dir = Y ise uzun kenar L/R (Left/Right)
+    if auto_dir == "X":
+        # Uzun kenar T ve B kenarı, komşuları direction Y, START ve END
+        komsular_uzun_start = system.neighbor_slabs_on_side(sid, "Y", "START")  # T kenarındaki komşular
+        komsular_uzun_end = system.neighbor_slabs_on_side(sid, "Y", "END")      # B kenarındaki komşular
+    else:
+        # Uzun kenar L ve R kenarı, komşuları direction X, START ve END
+        komsular_uzun_start = system.neighbor_slabs_on_side(sid, "X", "START")  # L kenarındaki komşular
+        komsular_uzun_end = system.neighbor_slabs_on_side(sid, "X", "END")      # R kenarındaki komşular
+    
     lines.append(f"    As_mesnet = As_ana = {As_mesnet_req:.1f} mm²/m")
-    lines.append(f"    As_pilye (mevcut) = {As_pilye:.1f} mm²/m")
-    lines.append(f"    As_ek = max(0, {As_mesnet_req:.1f} - {As_pilye:.1f}) = {As_ek_req:.1f} mm²/m")
+    lines.append(f"    As_pilye (bu döşeme) = {As_pilye_bu_doseme:.1f} mm²/m")
     
     if uzun_kenar_start_surekli:
         lines.append("    Uzun kenar START sürekli -> Mesnet ek donatısı kontrolü")
-        if As_ek_req > 1e-6:
-            ch_mesnet_ek_start = select_rebar_min_area(As_ek_req, smax, phi_min=8)
+        # START tarafındaki komşu döşemenin pilye alanını al
+        As_pilye_komsu_start = 0.0
+        for komsu_sid in komsular_uzun_start:
+            if neighbor_pilye_areas and komsu_sid in neighbor_pilye_areas:
+                As_pilye_komsu_start = neighbor_pilye_areas[komsu_sid]
+                lines.append(f"    Komşu {komsu_sid} pilye alanı: {As_pilye_komsu_start:.1f} mm²/m")
+                break
+            else:
+                lines.append(f"    Komşu {komsu_sid} pilye bilgisi yok, 0 kabul edildi")
+        
+        As_pilye_toplam_start = As_pilye_bu_doseme + As_pilye_komsu_start
+        As_ek_req_start = max(0, As_mesnet_req - As_pilye_toplam_start)
+        lines.append(f"    As_pilye (toplam: bu + komşu) = {As_pilye_bu_doseme:.1f} + {As_pilye_komsu_start:.1f} = {As_pilye_toplam_start:.1f} mm²/m")
+        lines.append(f"    As_ek = max(0, {As_mesnet_req:.1f} - {As_pilye_toplam_start:.1f}) = {As_ek_req_start:.1f} mm²/m")
+        
+        if As_ek_req_start > 1e-6:
+            ch_mesnet_ek_start = select_rebar_min_area(As_ek_req_start, smax, phi_min=8)
             if ch_mesnet_ek_start:
                 lines.append(f"    Seçim (START): {ch_mesnet_ek_start.label_with_area()}")
         else:
@@ -385,8 +455,23 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     
     if uzun_kenar_end_surekli:
         lines.append("    Uzun kenar END sürekli -> Mesnet ek donatısı kontrolü")
-        if As_ek_req > 1e-6:
-            ch_mesnet_ek_end = select_rebar_min_area(As_ek_req, smax, phi_min=8)
+        # END tarafındaki komşu döşemenin pilye alanını al
+        As_pilye_komsu_end = 0.0
+        for komsu_sid in komsular_uzun_end:
+            if neighbor_pilye_areas and komsu_sid in neighbor_pilye_areas:
+                As_pilye_komsu_end = neighbor_pilye_areas[komsu_sid]
+                lines.append(f"    Komşu {komsu_sid} pilye alanı: {As_pilye_komsu_end:.1f} mm²/m")
+                break
+            else:
+                lines.append(f"    Komşu {komsu_sid} pilye bilgisi yok, 0 kabul edildi")
+        
+        As_pilye_toplam_end = As_pilye_bu_doseme + As_pilye_komsu_end
+        As_ek_req_end = max(0, As_mesnet_req - As_pilye_toplam_end)
+        lines.append(f"    As_pilye (toplam: bu + komşu) = {As_pilye_bu_doseme:.1f} + {As_pilye_komsu_end:.1f} = {As_pilye_toplam_end:.1f} mm²/m")
+        lines.append(f"    As_ek = max(0, {As_mesnet_req:.1f} - {As_pilye_toplam_end:.1f}) = {As_ek_req_end:.1f} mm²/m")
+        
+        if As_ek_req_end > 1e-6:
+            ch_mesnet_ek_end = select_rebar_min_area(As_ek_req_end, smax, phi_min=8)
             if ch_mesnet_ek_end:
                 lines.append(f"    Seçim (END): {ch_mesnet_ek_end.label_with_area()}")
         else:
