@@ -15,6 +15,7 @@ from dxf_out import export_to_dxf
 # Yeni modüller - hesap ve raporlama
 from oneway_slab import compute_oneway_report
 from twoway_slab import compute_twoway_report
+from moment_balance_slab import balance_support_moments
 from balcony_slab import compute_balcony_report
 
 class App(tk.Tk):
@@ -312,6 +313,27 @@ class App(tk.Tk):
             except Exception as e:
                 moment_results[sid] = None
         
+        # 1.5 Geçiş: TWOWAY döşemeler için mesnet dengelemesi (TS500)
+        raw_twoway_moments = {sid: res for sid, (res, _) in moment_results.items() 
+                              if res is not None and self.system.slabs.get(sid) and self.system.slabs[sid].kind == "TWOWAY"}
+        
+        # ONEWAY döşemeleri de ekle (TWOWAY-ONEWAY dengelemesi için)
+        for sid, val in moment_results.items():
+            if val is not None and self.system.slabs.get(sid) and self.system.slabs[sid].kind == "ONEWAY":
+                raw_twoway_moments[sid] = val[0]
+        
+        balanced_moments = {}
+        balance_log = []
+        if raw_twoway_moments:
+            balanced_moments, balance_log = balance_support_moments(self.system, raw_twoway_moments, bw)
+        
+        # Dengeleme logunu yazdır
+        if balance_log:
+            self.output.insert("end", "=== MESNET DENGELEMESİ (TS500) ===\n")
+            for line in balance_log:
+                self.output.insert("end", line + "\n")
+            self.output.insert("end", "\n")
+        
         # 2. Geçiş: Tüm döşemelerin tam donatı hesabını yap (pilye bilgileriyle)
         for sid in sorted(self.system.slabs.keys()):
             s = self.system.slabs[sid]
@@ -339,6 +361,18 @@ class App(tk.Tk):
                 elif s.kind == "TWOWAY":
                     for l in steps:
                         self.output.insert("end", l + "\n")
+                    
+                    # Dengelenmiş momentleri kullan
+                    balanced_res = balanced_moments.get(sid, res)
+                    if balanced_res:
+                        # Dengelenmiş momentler varsa göster
+                        mxn_bal, mxp_bal = balanced_res.get("Mx", (None, None))
+                        myn_bal, myp_bal = balanced_res.get("My", (None, None))
+                        mxn_orig, _ = res.get("Mx", (None, None))
+                        myn_orig, _ = res.get("My", (None, None))
+                        if mxn_bal != mxn_orig or myn_bal != myn_orig:
+                            self.output.insert("end", f"Dengelenmiş momentler: Mx_neg={mxn_bal:.3f}, My_neg={myn_bal:.3f}\n")
+                        res = balanced_res
                     
                     design_res, report_lines = compute_twoway_report(
                         self.system, sid, res, conc, steel, h, cover, bw

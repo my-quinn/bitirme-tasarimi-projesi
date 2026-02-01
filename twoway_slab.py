@@ -200,14 +200,44 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
     smax_x = twoway_smax_short(h) if res["short_dir"] == "X" else twoway_smax_long(h)
     smax_y = twoway_smax_long(h) if res["short_dir"] == "X" else twoway_smax_short(h)
     
+    lines.append(f"smax_x = {smax_x} mm, smax_y = {smax_y} mm")
+    lines.append("")
+    
     # X doğrultusu: d = h - cover (normal)
     # Y doğrultusu açıklık: d = h - cover - 10 (üst üste binen donatı için)
     # Y doğrultusu mesnet: d = h - cover (normal)
-    asx, ch_x, _ = system.design_main_rebar_from_M(mxp or 0, conc, steel, h, cover, smax_x, label_prefix="  X: ", d_delta_mm=0.0)
-    asy, ch_y, _ = system.design_main_rebar_from_M(myp or 0, conc, steel, h, cover, smax_y, label_prefix="  Y: ", d_delta_mm=-10.0)
     
-    asxn, ch_xn, _ = system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="  Xneg: ", d_delta_mm=0.0)
-    asyn, ch_yn, _ = system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="  Yneg: ", d_delta_mm=0.0)
+    # X açıklık donatısı
+    lines.append("--- X Açıklık Donatısı (Mx_pos) ---")
+    asx, ch_x, steps_x = system.design_main_rebar_from_M(mxp or 0, conc, steel, h, cover, smax_x, label_prefix="", d_delta_mm=0.0)
+    for step in steps_x:
+        lines.append(f"  {step}")
+    lines.append(f"  Seçilen: {ch_x.label()}")
+    lines.append("")
+    
+    # Y açıklık donatısı (d - 10mm)
+    lines.append("--- Y Açıklık Donatısı (My_pos) [d-10mm] ---")
+    asy, ch_y, steps_y = system.design_main_rebar_from_M(myp or 0, conc, steel, h, cover, smax_y, label_prefix="", d_delta_mm=-10.0)
+    for step in steps_y:
+        lines.append(f"  {step}")
+    lines.append(f"  Seçilen: {ch_y.label()}")
+    lines.append("")
+    
+    # X mesnet donatısı
+    lines.append("--- X Mesnet Donatısı (Mx_neg) ---")
+    asxn, ch_xn, steps_xn = system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="", d_delta_mm=0.0)
+    for step in steps_xn:
+        lines.append(f"  {step}")
+    lines.append(f"  Seçilen: {ch_xn.label()}")
+    lines.append("")
+    
+    # Y mesnet donatısı
+    lines.append("--- Y Mesnet Donatısı (My_neg) ---")
+    asyn, ch_yn, steps_yn = system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="", d_delta_mm=0.0)
+    for step in steps_yn:
+        lines.append(f"  {step}")
+    lines.append(f"  Seçilen: {ch_yn.label()}")
+    lines.append("")
 
     ch_x_il = select_rebar_min_area(max(0, ch_xn.area_mm2_per_m - ch_x.area_mm2_per_m), 330)
     ch_y_il = select_rebar_min_area(max(0, ch_yn.area_mm2_per_m - ch_y.area_mm2_per_m), 330)
@@ -216,7 +246,7 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
         "kind": "TWOWAY", "short_dir": res["short_dir"], "cover_mm": cover,
         "choices": {"x_span": ch_x, "y_span": ch_y, "x_support_extra": ch_x_il, "y_support_extra": ch_y_il}
     }
-    lines.append(f"  X: {ch_x.label()} | Y: {ch_y.label()}")
+    lines.append(f"SONUÇ: X: {ch_x.label()} | Y: {ch_y.label()}")
     lines.append("")
     
     return design_res, lines
