@@ -174,8 +174,57 @@ def compute_twoway_per_slab(system, sid: str, bw: float) -> Tuple[dict, List[str
     }, steps
 
 
+def get_neighbor_on_edge_twoway(system, sid: str, edge: str):
+    """
+    Belirli bir kenarın komşu döşemesini ve türünü döndürür.
+    
+    Args:
+        system: SlabSystem nesnesi
+        sid: Döşeme ID'si
+        edge: Kenar ("L", "R", "T", "B")
+    
+    Returns:
+        (komşu_sid, komşu_kind) veya (None, None) eğer komşu yoksa
+    """
+    edge = edge.upper()
+    s = system.slabs[sid]
+    i0, j0, i1, j1 = s.bbox()
+    
+    if edge == "L":
+        if i0 == 0:
+            return None, None
+        for j in range(j0, j1 + 1):
+            nb = system.cell_owner.get((i0 - 1, j))
+            if nb and nb != sid and nb in system.slabs:
+                return nb, system.slabs[nb].kind
+    elif edge == "R":
+        if i1 >= system.Nx - 1:
+            return None, None
+        for j in range(j0, j1 + 1):
+            nb = system.cell_owner.get((i1 + 1, j))
+            if nb and nb != sid and nb in system.slabs:
+                return nb, system.slabs[nb].kind
+    elif edge == "T":
+        if j0 == 0:
+            return None, None
+        for i in range(i0, i1 + 1):
+            nb = system.cell_owner.get((i, j0 - 1))
+            if nb and nb != sid and nb in system.slabs:
+                return nb, system.slabs[nb].kind
+    elif edge == "B":
+        if j1 >= system.Ny - 1:
+            return None, None
+        for i in range(i0, i1 + 1):
+            nb = system.cell_owner.get((i, j1 + 1))
+            if nb and nb != sid and nb in system.slabs:
+                return nb, system.slabs[nb].kind
+    
+    return None, None
+
+
 def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
-                          h: float, cover: float, bw: float) -> Tuple[dict, List[str]]:
+                          h: float, cover: float, bw: float,
+                          neighbor_pilye_areas: Optional[dict] = None) -> Tuple[dict, List[str]]:
     """
     Çift doğrultulu döşeme için donatı hesabı ve raporlama yapar.
     
@@ -188,11 +237,15 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
         h: Döşeme kalınlığı (mm)
         cover: Pas payı (mm)
         bw: Kiriş genişliği (m)
+        neighbor_pilye_areas: Komşu döşemelerin pilye alanları {sid: area_mm2_per_m}
     
     Returns:
         (tasarım_sonucu_dict, rapor_satırları_listesi)
     """
     lines = []
+    
+    if neighbor_pilye_areas is None:
+        neighbor_pilye_areas = {}
     
     mxn, mxp = res["Mx"]
     myn, myp = res["My"]
@@ -213,6 +266,11 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
     for step in steps_x:
         lines.append(f"  {step}")
     lines.append(f"  Seçilen: {ch_x.label()}")
+    
+    # X açıklık donatısını düz ve pilye olarak eşit şekilde ayır
+    ch_x_duz = RebarChoice(ch_x.phi_mm, ch_x.s_mm * 2, ch_x.area_mm2_per_m / 2)
+    ch_x_pilye = RebarChoice(ch_x.phi_mm, ch_x.s_mm * 2, ch_x.area_mm2_per_m / 2)
+    lines.append(f"  → Düz: {ch_x_duz.label()}, Pilye: {ch_x_pilye.label()}")
     lines.append("")
     
     # Y açıklık donatısı (d - 10mm)
@@ -221,32 +279,108 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
     for step in steps_y:
         lines.append(f"  {step}")
     lines.append(f"  Seçilen: {ch_y.label()}")
+    
+    # Y açıklık donatısını düz ve pilye olarak eşit şekilde ayır
+    ch_y_duz = RebarChoice(ch_y.phi_mm, ch_y.s_mm * 2, ch_y.area_mm2_per_m / 2)
+    ch_y_pilye = RebarChoice(ch_y.phi_mm, ch_y.s_mm * 2, ch_y.area_mm2_per_m / 2)
+    lines.append(f"  → Düz: {ch_y_duz.label()}, Pilye: {ch_y_pilye.label()}")
     lines.append("")
     
-    # X mesnet donatısı
+    # X mesnet donatısı gereksinimi ve ek donatı kontrolü
     lines.append("--- X Mesnet Donatısı (Mx_neg) ---")
     asxn, ch_xn, steps_xn = system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="", d_delta_mm=0.0)
     for step in steps_xn:
         lines.append(f"  {step}")
-    lines.append(f"  Seçilen: {ch_xn.label()}")
+    lines.append(f"  Gerekli As_mesnet = {asxn:.1f} mm²/m")
+    
+    # X mesnet ek donatısı kontrolü (L/R kenarları)
+    As_pilye_x = ch_x_pilye.area_mm2_per_m
+    ch_x_il = None
+    max_As_ek_x = 0.0
+    
+    for edge in ["L", "R"]:
+        neighbor_id, neighbor_kind = get_neighbor_on_edge_twoway(system, sid, edge)
+        
+        if neighbor_id is None:
+            As_mevcut = As_pilye_x
+            lines.append(f"  {edge} kenarı: Süreksiz → Mevcut pilye = {As_mevcut:.1f} mm²/m")
+        elif neighbor_kind == "BALCONY":
+            As_mevcut = As_pilye_x
+            lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
+        else:
+            As_pilye_komsu = neighbor_pilye_areas.get(neighbor_id, 0.0)
+            As_mevcut = As_pilye_x + As_pilye_komsu
+            lines.append(f"  {edge} kenarı: {neighbor_kind} ({neighbor_id}) → Mevcut = {As_pilye_x:.1f} + {As_pilye_komsu:.1f} = {As_mevcut:.1f} mm²/m")
+        
+        As_ek = max(0, asxn - As_mevcut)
+        if As_ek > max_As_ek_x:
+            max_As_ek_x = As_ek
+    
+    if max_As_ek_x > 1e-6:
+        ch_x_il = select_rebar_min_area(max_As_ek_x, 300)  # Mesnet ek donatısı için smax=300
+        if ch_x_il:
+            lines.append(f"  As_ek = {max_As_ek_x:.1f} mm²/m → Ek Donatı: {ch_x_il.label_with_area()}")
+    else:
+        lines.append(f"  Pilye yeterli, ek donatı gerekmiyor")
     lines.append("")
     
-    # Y mesnet donatısı
+    # Y mesnet donatısı gereksinimi ve ek donatı kontrolü
     lines.append("--- Y Mesnet Donatısı (My_neg) ---")
     asyn, ch_yn, steps_yn = system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="", d_delta_mm=0.0)
     for step in steps_yn:
         lines.append(f"  {step}")
-    lines.append(f"  Seçilen: {ch_yn.label()}")
+    lines.append(f"  Gerekli As_mesnet = {asyn:.1f} mm²/m")
+    
+    # Y mesnet ek donatısı kontrolü (T/B kenarları)
+    As_pilye_y = ch_y_pilye.area_mm2_per_m
+    ch_y_il = None
+    max_As_ek_y = 0.0
+    
+    for edge in ["T", "B"]:
+        neighbor_id, neighbor_kind = get_neighbor_on_edge_twoway(system, sid, edge)
+        
+        if neighbor_id is None:
+            As_mevcut = As_pilye_y
+            lines.append(f"  {edge} kenarı: Süreksiz → Mevcut pilye = {As_mevcut:.1f} mm²/m")
+        elif neighbor_kind == "BALCONY":
+            As_mevcut = As_pilye_y
+            lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
+        else:
+            As_pilye_komsu = neighbor_pilye_areas.get(neighbor_id, 0.0)
+            As_mevcut = As_pilye_y + As_pilye_komsu
+            lines.append(f"  {edge} kenarı: {neighbor_kind} ({neighbor_id}) → Mevcut = {As_pilye_y:.1f} + {As_pilye_komsu:.1f} = {As_mevcut:.1f} mm²/m")
+        
+        As_ek = max(0, asyn - As_mevcut)
+        if As_ek > max_As_ek_y:
+            max_As_ek_y = As_ek
+    
+    if max_As_ek_y > 1e-6:
+        ch_y_il = select_rebar_min_area(max_As_ek_y, 300)  # Mesnet ek donatısı için smax=300
+        if ch_y_il:
+            lines.append(f"  As_ek = {max_As_ek_y:.1f} mm²/m → Ek Donatı: {ch_y_il.label_with_area()}")
+    else:
+        lines.append(f"  Pilye yeterli, ek donatı gerekmiyor")
     lines.append("")
-
-    ch_x_il = select_rebar_min_area(max(0, ch_xn.area_mm2_per_m - ch_x.area_mm2_per_m), 330)
-    ch_y_il = select_rebar_min_area(max(0, ch_yn.area_mm2_per_m - ch_y.area_mm2_per_m), 330)
 
     design_res = {
         "kind": "TWOWAY", "short_dir": res["short_dir"], "cover_mm": cover,
-        "choices": {"x_span": ch_x, "y_span": ch_y, "x_support_extra": ch_x_il, "y_support_extra": ch_y_il}
+        "choices": {
+            "x_span": ch_x, 
+            "x_span_duz": ch_x_duz, 
+            "x_span_pilye": ch_x_pilye,
+            "y_span": ch_y, 
+            "y_span_duz": ch_y_duz, 
+            "y_span_pilye": ch_y_pilye,
+            "x_support_extra": ch_x_il, 
+            "y_support_extra": ch_y_il
+        }
     }
-    lines.append(f"SONUÇ: X: {ch_x.label()} | Y: {ch_y.label()}")
+    lines.append(f"SONUÇ: X: {ch_x_duz.label()} düz + {ch_x_pilye.label()} pilye | Y: {ch_y_duz.label()} düz + {ch_y_pilye.label()} pilye")
+    if ch_x_il:
+        lines.append(f"       X Mesnet Ek: {ch_x_il.label()}")
+    if ch_y_il:
+        lines.append(f"       Y Mesnet Ek: {ch_y_il.label()}")
     lines.append("")
     
     return design_res, lines
+

@@ -375,7 +375,8 @@ class App(tk.Tk):
                         res = balanced_res
                     
                     design_res, report_lines = compute_twoway_report(
-                        self.system, sid, res, conc, steel, h, cover, bw
+                        self.system, sid, res, conc, steel, h, cover, bw,
+                        neighbor_pilye_areas=pilye_areas
                     )
                     for l in report_lines:
                         self.output.insert("end", l + "\n")
