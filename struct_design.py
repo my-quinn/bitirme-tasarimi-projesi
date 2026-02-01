@@ -82,6 +82,7 @@ def steel_to_tabcol(steel: str) -> str:
     return "S420" if steel == "B420C" else "B500"
 
 def interp_ks_from_K(K_calc: float, conc_col: str, steel_col: str) -> Tuple[float, List[str]]:
+    """K değerine göre ks katsayısını tablodan interpolasyon ile bulur."""
     steps = []
     pairs = []
     for r in sorted(beton_tablosu.keys()):
@@ -92,26 +93,26 @@ def interp_ks_from_K(K_calc: float, conc_col: str, steel_col: str) -> Tuple[floa
 
     K_max = pairs[0][0]
     K_min = pairs[-1][0]
-    steps.append(f"Tablo aralığı: K_max={K_max:.2f}, K_min={K_min:.2f}")
 
     if K_calc >= K_max:
         ks = pairs[0][1]
-        steps.append(f"K_calc={K_calc:.2f} >= K_max -> ks=ks(row={pairs[0][2]})={ks:.3f} (clamp)")
+        steps.append(f"K={K_calc:.2f} >= K_max={K_max:.2f} → ks={ks:.3f}")
         return ks, steps
     if K_calc <= K_min:
         ks = pairs[-1][1]
-        steps.append(f"K_calc={K_calc:.2f} <= K_min -> ks=ks(row={pairs[-1][2]})={ks:.3f} (clamp)")
+        steps.append(f"K={K_calc:.2f} <= K_min={K_min:.2f} → ks={ks:.3f}")
         return ks, steps
 
     for (K_hi, ks_hi, r_hi), (K_lo, ks_lo, r_lo) in zip(pairs[:-1], pairs[1:]):
         if K_hi >= K_calc >= K_lo:
+            # Lineer interpolasyon
             ks = lerp(K_hi, ks_hi, K_lo, ks_lo, K_calc)
-            steps.append(f"Braket: row{r_hi}(K={K_hi:.2f},ks={ks_hi:.3f}) - row{r_lo}(K={K_lo:.2f},ks={ks_lo:.3f})")
-            steps.append(f"Interpolasyon: ks = {ks:.3f}")
+            steps.append(f"Tablo: K={K_hi:.1f}→ks={ks_hi:.2f}, K={K_lo:.1f}→ks={ks_lo:.2f}")
+            steps.append(f"ks = {ks_hi:.2f} + ({K_calc:.2f}-{K_hi:.1f})/({K_lo:.1f}-{K_hi:.1f})×({ks_lo:.2f}-{ks_hi:.2f}) = {ks:.3f}")
             return ks, steps
 
     ks = pairs[-1][1]
-    steps.append("Braket bulunamadı (beklenmeyen) -> ks clamp min")
+    steps.append(f"Braket bulunamadı → ks={ks:.3f}")
     return ks, steps
 
 # =========================================================
@@ -144,19 +145,19 @@ def as_from_abacus_steps(
 
     b_mm = 1000.0
     M_Nmm = abs(M_kNm_per_m) * 1e6
-    steps.append(f"M(Nmm) = |M|*1e6 = {abs(M_kNm_per_m):.3f}*1e6 = {M_Nmm:.1f} Nmm/m")
+    steps.append(f"M = {abs(M_kNm_per_m):.3f} kNm/m = {M_Nmm:.0f} Nmm/m")
 
+    # K = 100 × (b × d²) / M_Nmm
     K_calc = 100 * (b_mm * (d**2)) / M_Nmm
     conc_col = conc_to_tabcol(conc)
     steel_col = steel_to_tabcol(steel)
-    steps.append(f"Beton kolonu = {conc_col}, Çelik kolonu = {steel_col}")
-    steps.append(f"K_calc = 1e5*(b*d^2)/M = 1e5*({b_mm:.0f}*{d:.1f}^2)/{M_Nmm:.1f} = {K_calc:.2f}")
+    steps.append(f"K = 100×(b×d²)/M = 100×({b_mm:.0f}×{d:.1f}²)/{M_Nmm:.0f} = {K_calc:.2f}")
 
     ks, st_ks = interp_ks_from_K(K_calc, conc_col, steel_col)
     steps.extend(st_ks)
 
     As = ks * abs(M_kNm_per_m) * 1000.0 / d
-    steps.append(f"As = ks*M*1000/d = {ks:.3f}*{abs(M_kNm_per_m):.3f}*1000/{d:.1f} = {As:.1f} mm²/m")
+    steps.append(f"As = ks×M×1000/d = {ks:.3f}×{abs(M_kNm_per_m):.3f}×1000/{d:.1f} = {As:.1f} mm²/m")
     return As, steps
 
 # =========================================================

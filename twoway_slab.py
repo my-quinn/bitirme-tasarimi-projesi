@@ -134,13 +134,31 @@ def compute_twoway_per_slab(system, sid: str, bw: float) -> Tuple[dict, List[str
 
     steps.append(f"Alphas: sn={a_sn}, sp={a_sp}, ln={a_ln}, lp={a_lp}")
 
-    M_sn = a_sn * pd * (ls**2) if a_sn is not None else None
-    M_sp = a_sp * pd * (ls**2) if a_sp is not None else None
-    M_ln = a_ln * pd * (ls**2) if a_ln is not None else None
-    M_lp = a_lp * pd * (ls**2) if a_lp is not None else None
+    # Moment hesabı: M = α × pd × ls²
+    ls_sq = ls ** 2
+    steps.append(f"pd = {pd:.3f} kN/m², ls = {ls:.3f} m, ls² = {ls_sq:.4f} m²")
+    
+    M_sn = a_sn * pd * ls_sq if a_sn is not None else None
+    M_sp = a_sp * pd * ls_sq if a_sp is not None else None
+    M_ln = a_ln * pd * ls_sq if a_ln is not None else None
+    M_lp = a_lp * pd * ls_sq if a_lp is not None else None
+
+    # Moment değerlerini göster
+    steps.append(f"M_sn = {a_sn}×{pd:.3f}×{ls_sq:.4f} = {M_sn:.3f} kNm/m" if M_sn is not None else "M_sn = -")
+    steps.append(f"M_sp = {a_sp}×{pd:.3f}×{ls_sq:.4f} = {M_sp:.3f} kNm/m" if M_sp is not None else "M_sp = -")
+    steps.append(f"M_ln = {a_ln}×{pd:.3f}×{ls_sq:.4f} = {M_ln:.3f} kNm/m" if M_ln is not None else "M_ln = -")
+    steps.append(f"M_lp = {a_lp}×{pd:.3f}×{ls_sq:.4f} = {M_lp:.3f} kNm/m" if M_lp is not None else "M_lp = -")
 
     short_dir = "X" if Lx_n <= Ly_n else "Y"
     steps.append(f"Kısa doğrultu: {short_dir}")
+    
+    # Eksenlere atama
+    if short_dir == "X":
+        steps.append(f"  Mx_neg = M_sn = {M_sn:.3f}, Mx_pos = M_sp = {M_sp:.3f}" if M_sn and M_sp else "")
+        steps.append(f"  My_neg = M_ln = {M_ln:.3f}, My_pos = M_lp = {M_lp:.3f}" if M_ln and M_lp else "")
+    else:
+        steps.append(f"  My_neg = M_sn = {M_sn:.3f}, My_pos = M_sp = {M_sp:.3f}" if M_sn and M_sp else "")
+        steps.append(f"  Mx_neg = M_ln = {M_ln:.3f}, Mx_pos = M_lp = {M_lp:.3f}" if M_ln and M_lp else "")
 
     if short_dir == "X":
         Mx_neg, Mx_pos = M_sn, M_sp
@@ -182,11 +200,14 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
     smax_x = twoway_smax_short(h) if res["short_dir"] == "X" else twoway_smax_long(h)
     smax_y = twoway_smax_long(h) if res["short_dir"] == "X" else twoway_smax_short(h)
     
-    asx, ch_x, _ = system.design_main_rebar_from_M(mxp or 0, conc, steel, h, cover, smax_x, label_prefix="  X: ")
-    asy, ch_y, _ = system.design_main_rebar_from_M(myp or 0, conc, steel, h, cover, smax_y, label_prefix="  Y: ")
+    # X doğrultusu: d = h - cover (normal)
+    # Y doğrultusu açıklık: d = h - cover - 10 (üst üste binen donatı için)
+    # Y doğrultusu mesnet: d = h - cover (normal)
+    asx, ch_x, _ = system.design_main_rebar_from_M(mxp or 0, conc, steel, h, cover, smax_x, label_prefix="  X: ", d_delta_mm=0.0)
+    asy, ch_y, _ = system.design_main_rebar_from_M(myp or 0, conc, steel, h, cover, smax_y, label_prefix="  Y: ", d_delta_mm=-10.0)
     
-    asxn, ch_xn, _ = system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="  Xneg: ")
-    asyn, ch_yn, _ = system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="  Yneg: ")
+    asxn, ch_xn, _ = system.design_main_rebar_from_M(abs(mxn or 0), conc, steel, h, cover, smax_x, label_prefix="  Xneg: ", d_delta_mm=0.0)
+    asyn, ch_yn, _ = system.design_main_rebar_from_M(abs(myn or 0), conc, steel, h, cover, smax_y, label_prefix="  Yneg: ", d_delta_mm=0.0)
 
     ch_x_il = select_rebar_min_area(max(0, ch_xn.area_mm2_per_m - ch_x.area_mm2_per_m), 330)
     ch_y_il = select_rebar_min_area(max(0, ch_yn.area_mm2_per_m - ch_y.area_mm2_per_m), 330)
