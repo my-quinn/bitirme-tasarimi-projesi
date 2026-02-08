@@ -42,17 +42,51 @@ def interp_alpha(m: float, m_points: List[float], a_points: List[float]) -> floa
 # ONEWAY multi-span coefficients
 # =========================================================
 def one_way_coefficients(n_spans: int):
+    """
+    Tek doğrultuda çalışan döşemeler için moment katsayıları.
+    Uzun kenarlarından sürekli döşeme sayısına göre katsayılar belirlenir.
+    
+    Kurallar:
+    - 1 açıklık: M+ = pl²/8, mesnet momenti yok (ayrı işlenir)
+    - 2 açıklık: Tüm M+ = pl²/11, orta mesnet = pl²/8, dış mesnetler = pl²/24
+    - 3 açıklık: Kenar M+ = pl²/11, orta M+ = pl²/15, dış mesnetler = pl²/24, iç mesnetler = pl²/9
+    - 4+ açıklık: Kenar M+ = pl²/11, diğer M+ = pl²/15, 
+                  dış mesnetler = pl²/24, tam orta mesnet = pl²/10, diğer iç mesnetler = pl²/9
+    
+    Returns:
+        (support_neg, span_pos): Mesnet ve açıklık katsayıları (negatif/pozitif işaretli)
+    """
+    if n_spans == 1:
+        # Tek açıklık: mesnet momenti yok, açıklık momenti 1/8
+        return [0.0, 0.0], [1/8]
+    
     if n_spans == 2:
+        # 2 açıklık: orta mesnet 1/8, dış mesnetler 1/24
         return [-1/24, -1/8, -1/24], [1/11, 1/11]
+    
     if n_spans == 3:
+        # 3 açıklık: dış mesnetler 1/24, iç mesnetler 1/9
         return [-1/24, -1/9, -1/9, -1/24], [1/11, 1/15, 1/11]
+    
+    # 4+ açıklık
     support_neg = [0.0] * (n_spans + 1)
-    support_neg[0] = support_neg[-1] = -1/24
-    support_neg[1] = support_neg[-2] = -1/9
-    for i in range(2, n_spans - 1):
-        support_neg[i] = -1/10
+    support_neg[0] = support_neg[-1] = -1/24  # Dış mesnetler
+    
+    # İç mesnetler
+    for i in range(1, n_spans):
+        support_neg[i] = -1/9  # Varsayılan iç mesnet
+    
+    # Tam ortadaki mesnet (varsa) 1/10
+    if n_spans % 2 == 0:
+        # Çift sayıda açıklık: tam ortada tek bir mesnet var
+        mid_support = n_spans // 2
+        support_neg[mid_support] = -1/10
+    # Tek sayıda açıklık için orta yok, hepsi 1/9 kalır
+    
+    # Açıklık katsayıları
     span_pos = [1/15] * n_spans
-    span_pos[0] = span_pos[-1] = 1/11
+    span_pos[0] = span_pos[-1] = 1/11  # Kenar açıklıklar
+    
     return support_neg, span_pos
 
 def one_span_coeff_by_fixity(fixed_start: bool, fixed_end: bool):

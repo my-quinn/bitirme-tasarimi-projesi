@@ -14,20 +14,30 @@ from struct_design import (
 
 def build_oneway_chain(system, sid: str, direction: str) -> List[str]:
     """
-    Verilen döşemeden başlayarak tek doğrultulu döşeme zincirini oluşturur.
+    Verilen döşemeden başlayarak UZUN KENARLARINDAN sürekli tek doğrultulu döşeme zincirini oluşturur.
+    
+    Tek doğrultuda çalışan döşemelerde:
+    - Yük KISA KENAR yönünde taşınır
+    - UZUN KENARLAR birbirine bitişikse → çok açıklıklı sürekli sistem oluşur
+    - KISA KENARLAR birbirine bitişikse → tek açıklıklı olarak değerlendirilir
     
     Args:
         system: SlabSystem nesnesi
         sid: Başlangıç döşeme ID'si
-        direction: Zincir yönü ("X" veya "Y")
+        direction: Taşıma doğrultusu ("X" veya "Y") - kısa kenar yönü
     
     Returns:
-        Zincirdeki döşeme ID'lerinin sıralı listesi
+        Zincirdeki döşeme ID'lerinin sıralı listesi (uzun kenarlarından bitişik olanlar)
     """
     direction = direction.upper()
     if system.slabs[sid].kind != "ONEWAY":
         return [sid]
 
+    # Uzun kenar yönü = taşıma doğrultusunun TERSİ
+    # Örnek: taşıma X yönünde ise, uzun kenar Y yönüne paralel
+    # Bu durumda komşuları Y yönünde aramalıyız (uzun kenar boyunca)
+    long_edge_direction = "Y" if direction == "X" else "X"
+    
     stack = [sid]
     seen = {sid}
     chain = []
@@ -36,15 +46,17 @@ def build_oneway_chain(system, sid: str, direction: str) -> List[str]:
         if system.slabs[u].kind != "ONEWAY":
             continue
         chain.append(u)
+        # Uzun kenar yönündeki komşuları bul (START ve END taraflarında)
         for side in ("START", "END"):
-            for nb in system.neighbor_slabs_on_side(u, direction, side):
+            for nb in system.neighbor_slabs_on_side(u, long_edge_direction, side):
                 if nb in seen:
                     continue
                 seen.add(nb)
                 if nb in system.slabs and system.slabs[nb].kind == "ONEWAY":
                     stack.append(nb)
 
-    if direction == "X":
+    # Uzun kenar yönüne göre sırala
+    if long_edge_direction == "X":
         chain.sort(key=lambda x: system.slabs[x].i0)
     else:
         chain.sort(key=lambda x: system.slabs[x].j0)
@@ -54,14 +66,23 @@ def build_oneway_chain(system, sid: str, direction: str) -> List[str]:
 def chain_panel_boundary_supports(system, chain: List[str], direction: str) -> List[int]:
     """
     Zincirdeki panel sınırlarındaki mesnet gridline'larını bulur.
+    
+    Args:
+        direction: Taşıma doğrultusu (kısa kenar yönü)
+    
+    Returns:
+        Uzun kenar yönündeki mesnet gridline'ları
     """
     direction = direction.upper()
+    # Uzun kenar yönü = taşıma yönünün tersi
+    long_edge_direction = "Y" if direction == "X" else "X"
+    
     if len(chain) < 2:
         return []
     supports = []
     for a, b in zip(chain[:-1], chain[1:]):
         sa, sb = system.slabs[a], system.slabs[b]
-        if direction == "X":
+        if long_edge_direction == "X":
             g = sa.i1 + 1
             if sb.i0 == g:
                 supports.append(g)
@@ -166,7 +187,11 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
     steps.append(f"  START: {'Ankastre (TWOWAY komşu)' if fixed_start else ('Sürekli (ONEWAY/BALCONY komşu)' if continuous_start else 'Serbest')}")
     steps.append(f"  END: {'Ankastre (TWOWAY komşu)' if fixed_end else ('Sürekli (ONEWAY/BALCONY komşu)' if continuous_end else 'Serbest')}")
 
-    if direction == "X":
+    # Uzun kenar yönü = taşıma doğrultusunun tersi
+    long_edge_direction = "Y" if direction == "X" else "X"
+    
+    # Mesnet gridline'larını uzun kenar yönünde bul
+    if long_edge_direction == "X":
         start_g = min(system.slabs[x].i0 for x in chain)
         end_g = max(system.slabs[x].i1 + 1 for x in chain)
     else:
@@ -176,9 +201,9 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
     supports = [start_g, end_g]
     supports.extend(chain_panel_boundary_supports(system, chain, direction))
     for x in chain:
-        supports.extend(system.slab_support_gridlines_from_drawn_beams(x, direction))
+        supports.extend(system.slab_support_gridlines_from_drawn_beams(x, long_edge_direction))
     supports = sorted(set(supports))
-    steps.append(f"Mesnet gridline listesi: {supports}")
+    steps.append(f"Mesnet gridline listesi (uzun kenar yönünde): {supports}")
 
     spans = []
     for a, b_g in zip(supports[:-1], supports[1:]):

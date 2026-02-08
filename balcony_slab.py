@@ -156,9 +156,24 @@ def compute_balcony_report(system, sid: str, res: dict, conc: str, steel: str,
     Mdes, std = get_balcony_design_moment(system, sid, res["Mneg"], bw)
     lines.extend(std)
     
-    asb, ch_main, _ = system.design_main_rebar_from_M(Mdes, conc, steel, h, cover, oneway_smax_main(h), label_prefix="  ")
+    lines.append(f"--- Ana Donatı Hesabı ---")
+    asb, ch_main, steps_main = system.design_main_rebar_from_M(Mdes, conc, steel, h, cover, oneway_smax_main(h), label_prefix="  ")
+    for step in steps_main:
+        lines.append(f"  {step}")
+    lines.append(f"  As_gerekli = {asb:.1f} mm²/m")
+    lines.append(f"  Seçilen: {ch_main.label()} (As_prov = {ch_main.area_mm2_per_m:.1f} mm²/m)")
+    lines.append("")
+    
+    # Dağıtma donatısı (ana donatının 1/5'i)
     asd = ch_main.area_mm2_per_m / 5.0
     ch_dist = select_rebar_min_area(asd, oneway_smax_dist(), phi_min=8)
+    lines.append(f"--- Dağıtma Donatısı ---")
+    lines.append(f"  As_dist = As_main / 5 = {ch_main.area_mm2_per_m:.1f} / 5 = {asd:.1f} mm²/m")
+    if ch_dist:
+        lines.append(f"  Seçilen: {ch_dist.label()} (As_prov = {ch_dist.area_mm2_per_m:.1f} mm²/m)")
+    else:
+        lines.append(f"  HATA: Dağıtma donatısı seçilemedi!")
+    lines.append("")
     
     fixed, _ = balcony_fixed_edge_guess(system, sid)
     
@@ -166,7 +181,8 @@ def compute_balcony_report(system, sid: str, res: dict, conc: str, steel: str,
         "kind": "BALCONY", "cover_mm": cover, "fixed_edge": fixed,
         "choices": {"main": ch_main, "dist": ch_dist}
     }
-    lines.append(f"  Seçim: {ch_main.label()}")
+    lines.append(f"SONUÇ: Ana: {ch_main.label()}, Dağıtma: {ch_dist.label() if ch_dist else '-'}")
     lines.append("")
     
     return design_res, lines
+

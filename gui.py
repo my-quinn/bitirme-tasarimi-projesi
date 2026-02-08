@@ -371,7 +371,9 @@ class App(tk.Tk):
                         mxn_orig, _ = res.get("Mx", (None, None))
                         myn_orig, _ = res.get("My", (None, None))
                         if mxn_bal != mxn_orig or myn_bal != myn_orig:
-                            self.output.insert("end", f"Dengelenmiş momentler: Mx_neg={mxn_bal:.3f}, My_neg={myn_bal:.3f}\n")
+                            mxn_str = f"{mxn_bal:.3f}" if mxn_bal is not None else "-"
+                            myn_str = f"{myn_bal:.3f}" if myn_bal is not None else "-"
+                            self.output.insert("end", f"Dengelenmiş momentler: Mx_neg={mxn_str}, My_neg={myn_str}\n")
                         res = balanced_res
                     
                     design_res, report_lines = compute_twoway_report(

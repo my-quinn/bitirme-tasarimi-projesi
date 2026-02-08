@@ -152,13 +152,16 @@ def compute_twoway_per_slab(system, sid: str, bw: float) -> Tuple[dict, List[str
     short_dir = "X" if Lx_n <= Ly_n else "Y"
     steps.append(f"Kısa doğrultu: {short_dir}")
     
-    # Eksenlere atama
+    # Eksenlere atama - her zaman hem X hem Y göster
+    def fmt_moment(val, name):
+        return f"{val:.3f}" if val is not None else "-"
+    
     if short_dir == "X":
-        steps.append(f"  Mx_neg = M_sn = {M_sn:.3f}, Mx_pos = M_sp = {M_sp:.3f}" if M_sn and M_sp else "")
-        steps.append(f"  My_neg = M_ln = {M_ln:.3f}, My_pos = M_lp = {M_lp:.3f}" if M_ln and M_lp else "")
+        steps.append(f"  Mx_neg = M_sn = {fmt_moment(M_sn, 'M_sn')}, Mx_pos = M_sp = {fmt_moment(M_sp, 'M_sp')}")
+        steps.append(f"  My_neg = M_ln = {fmt_moment(M_ln, 'M_ln')}, My_pos = M_lp = {fmt_moment(M_lp, 'M_lp')}")
     else:
-        steps.append(f"  My_neg = M_sn = {M_sn:.3f}, My_pos = M_sp = {M_sp:.3f}" if M_sn and M_sp else "")
-        steps.append(f"  Mx_neg = M_ln = {M_ln:.3f}, Mx_pos = M_lp = {M_lp:.3f}" if M_ln and M_lp else "")
+        steps.append(f"  My_neg = M_sn = {fmt_moment(M_sn, 'M_sn')}, My_pos = M_sp = {fmt_moment(M_sp, 'M_sp')}")
+        steps.append(f"  Mx_neg = M_ln = {fmt_moment(M_ln, 'M_ln')}, Mx_pos = M_lp = {fmt_moment(M_lp, 'M_lp')}")
 
     if short_dir == "X":
         Mx_neg, Mx_pos = M_sn, M_sp
@@ -302,8 +305,9 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
         neighbor_id, neighbor_kind = get_neighbor_on_edge_twoway(system, sid, edge)
         
         if neighbor_id is None:
-            As_mevcut = As_pilye_x
-            lines.append(f"  {edge} kenarı: Süreksiz → Mevcut pilye = {As_mevcut:.1f} mm²/m")
+            # Süreksiz kenar - mesnet ek donatısı gerekmez
+            lines.append(f"  {edge} kenarı: Süreksiz → Mesnet ek donatısı gerekmez")
+            continue  # Bu kenarı atla
         elif neighbor_kind == "BALCONY":
             As_mevcut = As_pilye_x
             lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
@@ -340,8 +344,9 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
         neighbor_id, neighbor_kind = get_neighbor_on_edge_twoway(system, sid, edge)
         
         if neighbor_id is None:
-            As_mevcut = As_pilye_y
-            lines.append(f"  {edge} kenarı: Süreksiz → Mevcut pilye = {As_mevcut:.1f} mm²/m")
+            # Süreksiz kenar - mesnet ek donatısı gerekmez
+            lines.append(f"  {edge} kenarı: Süreksiz → Mesnet ek donatısı gerekmez")
+            continue  # Bu kenarı atla
         elif neighbor_kind == "BALCONY":
             As_mevcut = As_pilye_y
             lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
