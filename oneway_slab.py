@@ -145,15 +145,23 @@ def chain_end_fixity(system, chain: List[str], direction: str) -> Tuple[Tuple[bo
 def owner_slab_for_segment(system, chain: List[str], direction: str, g_mid: float) -> str:
     """
     Belirli bir segment için sahip döşemeyi bulur.
+    
+    NOT: Mesnet gridline'ları UZUN KENAR yönünde olduğu için,
+    koordinat kontrolü de uzun kenar yönünde yapılmalı.
+    - direction = "X" (kısa kenar) ise uzun kenar = "Y" → j0/j1 kontrol
+    - direction = "Y" (kısa kenar) ise uzun kenar = "X" → i0/i1 kontrol
     """
     direction = direction.upper()
     for sid in chain:
         s = system.slabs[sid]
+        # Uzun kenar yönündeki koordinatları kontrol et (direction'ın TERSİ)
         if direction == "X":
-            if s.i0 <= g_mid <= (s.i1 + 1):
+            # Uzun kenar Y yönünde → j gridline'larını kontrol et
+            if s.j0 <= g_mid <= (s.j1 + 1):
                 return sid
         else:
-            if s.j0 <= g_mid <= (s.j1 + 1):
+            # Uzun kenar X yönünde → i gridline'larını kontrol et
+            if s.i0 <= g_mid <= (s.i1 + 1):
                 return sid
     return chain[0]
 
@@ -245,11 +253,11 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
     Ls = [L for (L, *_rest) in spans]
     owners = [o for (_L, o, *_rest) in spans]
 
+    # Önce tüm momentleri hesapla (raporlamadan)
     span_Mpos = []
     for i in range(n_spans):
         M = span_c[i] * w * (Ls[i] ** 2)
         span_Mpos.append(M)
-        steps.append(f"Span{i+1} M+ = {M:.3f}")
 
     support_Mneg = []
     for i in range(n_spans + 1):
@@ -261,16 +269,24 @@ def compute_oneway_per_slab(system, sid: str, bw_val: float) -> Tuple[dict, List
             L2 = 0.5 * (Ls[i-1] ** 2 + Ls[i] ** 2)
         M = support_c[i] * w * L2
         support_Mneg.append(M)
-        steps.append(f"Mesnet{i} M- = {M:.3f}")
 
+    # Bu döşemeye ait span'ları bul
     owned_span_idx = [i for i, o in enumerate(owners) if o == sid]
     Mpos_max = max(span_Mpos[i] for i in owned_span_idx) if owned_span_idx else None
 
+    # Bu döşemeye temas eden mesnetleri bul
     touching = set()
     for i in owned_span_idx:
         touching.add(i)
         touching.add(i+1)
     Mneg_min = min(support_Mneg[i] for i in touching) if touching else None
+    
+    # Sadece bu döşemenin kullandığı momentleri raporla
+    steps.append(f"Bu döşemeye ({sid}) ait momentler:")
+    for i in owned_span_idx:
+        steps.append(f"  Açıklık M+ = {span_Mpos[i]:.3f} kNm/m (katsayı: 1/{1/span_c[i]:.0f})")
+    for i in sorted(touching):
+        steps.append(f"  Mesnet{i} M- = {support_Mneg[i]:.3f} kNm/m (katsayı: 1/{abs(1/support_c[i]):.0f})")
 
     return {
         "auto_dir": direction, "chain": chain,
@@ -361,6 +377,11 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     lines.append(f"    -> Düz: {duz.label()} (A={duz.area_mm2_per_m:.1f} mm²/m)")
     lines.append(f"    -> Pilye: {pilye.label()} (A={pilye.area_mm2_per_m:.1f} mm²/m)")
     
+    # Mesnet momenti için As hesabı (mesnet ek donatısı için kullanılacak)
+    As_mesnet_calc, ch_mesnet_from_M, st_mesnet_calc = system.design_main_rebar_from_M(
+        abs(Mneg), conc, steel, h, cover, smax, label_prefix="    ")
+    lines.append(f"\n    Mesnet Momenti için As = {As_mesnet_calc:.1f} mm²/m (M- = {abs(Mneg):.3f} kNm/m için)")
+    
     # --- 2. DAĞITMA DONATISI ---
     # Dağıtma donatısı uzun kenara paralel atılır
     lines.append("\n  === 2. DAĞITMA DONATISI ===")
@@ -435,7 +456,7 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     
     lines.append("\n  === 5. SÜREKLİ UZUN KENAR: MESNET EK DONATISI (İLAVE) ===")
     lines.append(f"    (Doğrultu: Kısa kenara paralel -> {kisa_kenar_dogrultusu})")
-    As_mesnet_req = As_main
+    As_mesnet_req = As_mesnet_calc  # Mesnet momenti için hesaplanan As kullan
     As_pilye_bu_doseme = pilye.area_mm2_per_m
     
     # Komşu döşemelerin pilye alanlarını bul (uzun kenar komşuları)
@@ -449,7 +470,7 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
         komsular_uzun_start = system.neighbor_slabs_on_side(sid, "X", "START")  # L kenarındaki komşular
         komsular_uzun_end = system.neighbor_slabs_on_side(sid, "X", "END")      # R kenarındaki komşular
     
-    lines.append(f"    As_mesnet = As_ana = {As_mesnet_req:.1f} mm²/m")
+    lines.append(f"    As_mesnet (hesaplanan) = {As_mesnet_req:.1f} mm²/m (M- = {abs(Mneg):.3f} kNm/m)")
     lines.append(f"    As_pilye (bu döşeme) = {As_pilye_bu_doseme:.1f} mm²/m")
     
     if uzun_kenar_start_surekli:
