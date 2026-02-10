@@ -6,10 +6,17 @@ from slab_model import SlabSystem, Slab
 class _DXFWriter:
     """ezdxf kütüphanesi kullanarak DXF dosyası oluşturan sınıf."""
     
-    def __init__(self):
+    def __init__(self, max_height=None):
         self.doc = ezdxf.new('R2010')  # AutoCAD 2010 formatı
         self.msp = self.doc.modelspace()
         self.layers_created = set()
+        self.max_height = max_height
+
+    def _fy(self, y):
+        """Y koordinatını ters çevir (GUI -> DXF dönüşümü için)."""
+        if self.max_height is not None:
+            return self.max_height - y
+        return y
 
     def add_layer(self, name: str):
         if name not in self.layers_created and name != "0":
@@ -18,14 +25,25 @@ class _DXFWriter:
 
     def add_line(self, x1, y1, x2, y2, layer="0"):
         self.add_layer(layer)
+        y1 = self._fy(y1)
+        y2 = self._fy(y2)
         self.msp.add_line((x1, y1), (x2, y2), dxfattribs={'layer': layer})
 
     def add_polyline(self, pts, layer="0", closed=False):
         self.add_layer(layer)
-        self.msp.add_lwpolyline(pts, dxfattribs={'layer': layer}, close=closed)
+        # pts listesi (x, y) tuple'larından oluşur
+        new_pts = [(x, self._fy(y)) for x, y in pts]
+        self.msp.add_lwpolyline(new_pts, dxfattribs={'layer': layer}, close=closed)
 
     def add_text(self, x, y, text, height=200.0, layer="TEXT", rotation=0.0, center=False):
         self.add_layer(layer)
+        y = self._fy(y)
+        # Rotation da bu dönüşümden etkilenebilir ama metin okuma yönü
+        # genelde X eksenine göre olduğu için, sadece konumu değiştiriyoruz.
+        # Ancak dikey (90 derece) metinler aşağıdan yukarı okunur (AutoCAD standartı).
+        # Eğer GUI'de yukarıdan aşağı okunan bir metin varsa, burada -90 yapmak gerekebilir.
+        # Şimdilik rotasyonu olduğu gibi bırakıyoruz, sadece konumu taşıyoruz.
+        
         txt = self.msp.add_text(text, dxfattribs={
             'layer': layer,
             'height': height,
@@ -762,7 +780,29 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
                   real_slabs: dict = None):
     from twoway_slab import slab_edge_has_beam
 
-    w = _DXFWriter()
+    # Kiriş olan kenarlara bw/2 ekle → Lx = Lxnet + bw etkisi
+    # ======================================================================
+    # Çizilmiş kirişleri takip et (aynı kirişi iki kez çizmemek için)
+    drawn_beams = set()
+
+    # Toplam Yüksekliği Hesapla (Y ekseni simetrisi için)
+    max_y_mm = 0.0
+    if real_slabs:
+        max_h = 0.0
+        for rs in real_slabs.values():
+            bottom = rs.y + rs.h
+            if bottom > max_h:
+                max_h = bottom
+        max_y_mm = max_h * 1000.0
+    else:
+        # Fallback
+        _, total_my = system.size_m_gross()
+        max_y_mm = total_my * 1000.0
+
+    # Margin ekle (isteğe bağlı, şimdilik tam sınır)
+    max_y_mm += 0.0 
+
+    w = _DXFWriter(max_height=max_y_mm)
     
     # Katmanları ekle
     layers = [
@@ -784,13 +824,6 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
     # Döşemeleri pozisyonuna göre sırala (soldan sağa)
     sorted_sids = sorted(system.slabs.keys(),
                          key=lambda sid: (system.slabs[sid].i0, system.slabs[sid].j0))
-
-    # ======================================================================
-    # Her döşemeyi gerçek konumuna göre yerleştir
-    # Kiriş olan kenarlara bw/2 ekle → Lx = Lxnet + bw etkisi
-    # ======================================================================
-    # Çizilmiş kirişleri takip et (aynı kirişi iki kez çizmemek için)
-    drawn_beams = set()
 
     for idx, sid in enumerate(sorted_sids):
         s = system.slabs[sid]
