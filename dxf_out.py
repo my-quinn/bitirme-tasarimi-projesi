@@ -187,30 +187,71 @@ def _draw_dimension_line(w: _DXFWriter, x0, y0, x1, y1, label: str, offset=150.0
         w.add_text(x0 + offset, mid_y, label, height=120, layer=layer, rotation=90)
 
 
-def _draw_support_rebar_horizontal(w: _DXFWriter, x0, y0, x1, y1, count: int, layer: str, label: str = None):
-    """Yatay mesnet donatısı çizer (birden fazla çizgi ile gösterir)"""
+def _draw_support_rebar_horizontal(w: _DXFWriter, x0, y0, x1, y1, count: int, layer: str, label: str = None, 
+                                   hook_start=False, hook_end=False, hook_len=100.0):
+    """
+    Yatay mesnet donatısı çizer (birden fazla çizgi ile gösterir).
+    hook_start: Sol uçta kanca (aşağı doğru)
+    hook_end: Sağ uçta kanca (aşağı doğru)
+    """
     if count < 1: count = 1
-    if count > 5: count = 5  # Görsel için max 5 çizgi
+    if count > 5: count = 5
     
     dy = (y1 - y0) / (count + 1)
+    
     for i in range(1, count + 1):
         y = y0 + i * dy
-        w.add_line(x0, y, x1, y, layer=layer)
+        pts = []
+        if hook_start:
+            pts.append((x0, y - hook_len))
+            pts.append((x0, y))
+        else:
+            pts.append((x0, y))
+            
+        if hook_end:
+            pts.append((x1, y))
+            pts.append((x1, y - hook_len))
+        else:
+            pts.append((x1, y))
+            
+        w.add_polyline(pts, layer=layer)
     
     if label:
         mid_y = (y0 + y1) / 2
         w.add_text(x0 - 50, mid_y, label, height=100, layer="TEXT", rotation=90)
 
 
-def _draw_support_rebar_vertical(w: _DXFWriter, x0, y0, x1, y1, count: int, layer: str, label: str = None):
-    """Dikey mesnet donatısı çizer (birden fazla çizgi ile gösterir)"""
+def _draw_support_rebar_vertical(w: _DXFWriter, x0, y0, x1, y1, count: int, layer: str, label: str = None,
+                                 hook_start=False, hook_end=False, hook_len=100.0):
+    """
+    Dikey mesnet donatısı çizer (birden fazla çizgi ile gösterir).
+    hook_start: Üst uçta kanca (sola/ters yöne doğru - kullanıcı isteğine göre ayarlanabilir, şimdilik sol)
+    hook_end: Alt uçta kanca (sola/ters yöne doğru)
+    """
     if count < 1: count = 1
-    if count > 5: count = 5  # Görsel için max 5 çizgi
+    if count > 5: count = 5
     
     dx = (x1 - x0) / (count + 1)
+    
     for i in range(1, count + 1):
         x = x0 + i * dx
-        w.add_line(x, y0, x, y1, layer=layer)
+        pts = []
+        # Dikeyde "start" üst (küçük y?), "end" alt (büyük y?)
+        # Parametreler y0 (üst), y1 (alt) varsayımıyla:
+        
+        if hook_start:
+            pts.append((x - hook_len, y0)) # Sola kıvrık
+            pts.append((x, y0))
+        else:
+            pts.append((x, y0))
+            
+        if hook_end:
+            pts.append((x, y1))
+            pts.append((x - hook_len, y1)) # Sola kıvrık
+        else:
+            pts.append((x, y1))
+            
+        w.add_polyline(pts, layer=layer)
     
     if label:
         mid_x = (x0 + x1) / 2
@@ -306,9 +347,35 @@ def _draw_oneway_reinforcement_detail(
         # --- 2. DAĞITMA DONATISI - Yatay (uzun kenara paralel) ---
         dist_count = 3
         dy_dist = Ly / (dist_count + 1)
+        hook_ext = bw_mm - 30.0
+        
         for i in range(1, dist_count + 1):
             y = iy0 + i * dy_dist
-            w.add_line(ix0, y, ix1, y, layer="REB_DIST")
+            pts = []
+            
+            # Sol taraf (Check continuity)
+            if not kisa_start_cont:
+                # Discontinuous: Hook at start (inside beam)
+                d_start = x0 - hook_ext
+                pts.append((d_start, y - hook_ext)) # Kanca ucu (kiriş içinde, aşağı doğru)
+                pts.append((d_start, y))            # Kanca dirsek
+            else:
+                # Continuous: Start at inner edge (no hook)
+                d_start = ix0 # Use slab edge
+                pts.append((d_start, y))
+            
+            # Sağ taraf (Check continuity)
+            if not kisa_end_cont:
+                # Discontinuous: Hook at end (inside beam)
+                d_end = x1 + hook_ext
+                pts.append((d_end, y))              # Dirsek
+                pts.append((d_end, y - hook_ext))   # Kanca ucu
+            else:
+                # Continuous: End at inner edge (no hook)
+                d_end = ix1 # Use slab edge
+                pts.append((d_end, y))
+                
+            w.add_polyline(pts, layer="REB_DIST")
         
         if ch_dist:
             w.add_text(midx, midy + 10, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT", center=True)
@@ -320,30 +387,47 @@ def _draw_oneway_reinforcement_detail(
         # Sol kenar (START) - süreksiz ise
         if ch_kenar_start and not kisa_start_cont:
             ext = Ln_short / 4.0  # ln/4 uzunluk
-            _draw_support_rebar_horizontal(w, ix0, iy0, ix0 + ext, iy1, 2, "REB_KENAR", ch_kenar_start.label())
-            _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/4", offset=40, layer="DIM")
+            # Sol taraf mesnet (kiriş): Kanca kirişin içinde bitmeli.
+            # Döşeme kenarı: x0. Kanca kırımı x0 - (bw-30) de olacak.
+            hook_x = x0 - hook_ext
+            end_x = ix0 + ext
+            
+            _draw_support_rebar_horizontal(w, hook_x, iy0, end_x, iy1, 2, "REB_KENAR", ch_kenar_start.label(),
+                                           hook_start=True, hook_len=hook_ext)
+            
+            _draw_dimension_line(w, ix0, iy1 + 80, end_x, iy1 + 80, "ln1/4", offset=40, layer="DIM")
             w.add_text(ix0 + ext/2, midy + 10, "boyuna kenar mesnet minAs", height=70, layer="TEXT", center=True)
         
         # Sağ kenar (END) - süreksiz ise
         if ch_kenar_end and not kisa_end_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_horizontal(w, ix1 - ext, iy0, ix1, iy1, 2, "REB_KENAR", ch_kenar_end.label())
-            _draw_dimension_line(w, ix1 - ext, iy1 + 80, ix1, iy1 + 80, "ln1/4", offset=40, layer="DIM")
+            # Sağ taraf mesnet
+            start_x = ix1 - ext
+            hook_x = x1 + hook_ext
+            
+            _draw_support_rebar_horizontal(w, start_x, iy0, hook_x, iy1, 2, "REB_KENAR", ch_kenar_end.label(),
+                                           hook_end=True, hook_len=hook_ext)
+            
+            _draw_dimension_line(w, start_x, iy1 + 80, ix1, iy1 + 80, "ln1/4", offset=40, layer="DIM")
         
         # --- 4. BOYUNA İÇ MESNET DONATISI (Sürekli Kısa Kenar) ---
         # Kısa kenar = L (ix0) ve R (ix1), donatı uzun kenara paralel → X yönünde (yatay)
+        # İç mesnetlerde kanca istenmedi, sadece "sürekli" olduğu için düz geçiş varsayılır veya kanca gerekmez.
+        # "boyuna kenar mesnet donatısının kancasını çiz" dendi. İç mesnet için özel bir kanca isteği yok.
+        # Mevcut düz çizgi yeterli.
         
         # Sol kenar (START) - sürekli ise
         if ch_ic_start and kisa_start_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_horizontal(w, ix0, iy0, ix0 + ext, iy1, 2, "REB_IC_MESNET", ch_ic_start.label())
+            # İç mesnet, düz devam eder. Ancak çizim sınırlarını x0 yapalım ki tam birleşsin.
+            _draw_support_rebar_horizontal(w, x0, iy0, ix0 + ext, iy1, 2, "REB_IC_MESNET", ch_ic_start.label())
             _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/4", offset=40, layer="DIM")
             w.add_text(ix0 + ext/2, midy + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", center=True)
         
         # Sağ kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_horizontal(w, ix1 - ext, iy0, ix1, iy1, 2, "REB_IC_MESNET", ch_ic_end.label())
+            _draw_support_rebar_horizontal(w, ix1 - ext, iy0, x1, iy1, 2, "REB_IC_MESNET", ch_ic_end.label())
             _draw_dimension_line(w, ix1 - ext, iy1 + 80, ix1, iy1 + 80, "ln2/4", offset=40, layer="DIM")
         
         # --- 5. MESNET EK DONATISI (Sürekli Uzun Kenar) ---
@@ -441,9 +525,35 @@ def _draw_oneway_reinforcement_detail(
         # --- 2. DAĞITMA DONATISI - Dikey (uzun kenara paralel) ---
         dist_count = 3
         dx_dist = Lx / (dist_count + 1)
+        hook_ext = bw_mm - 30.0
+        
         for i in range(1, dist_count + 1):
             x = ix0 + i * dx_dist
-            w.add_line(x, iy0, x, iy1, layer="REB_DIST")
+            pts = []
+            
+            # Üst uç (START/Left in Y logic?) -> Top (Check continuity)
+            if not kisa_start_cont:
+                # Discontinuous: Hook at Top (inside beam, negative Y dir ref? No, y0 is top)
+                d_start = y0 - hook_ext
+                pts.append((x - hook_ext, d_start)) # Kanca ucu (kiriş içinde, sola/negatif x)
+                pts.append((x, d_start))            # Kanca dirsek
+            else:
+                # Continuous: Start at inner edge (no hook)
+                d_start = iy0
+                pts.append((x, d_start))
+                
+            # Alt uç (END/Bottom) -> Bottom (Check continuity)
+            if not kisa_end_cont:
+                # Discontinuous: Hook at Bottom (inside beam)
+                d_end = y1 + hook_ext
+                pts.append((x, d_end))              # Dirsek
+                pts.append((x - hook_ext, d_end))   # Kanca ucu
+            else:
+                # Continuous: End at inner edge (no hook)
+                d_end = iy1
+                pts.append((x, d_end))
+                
+            w.add_polyline(pts, layer="REB_DIST")
         
         if ch_dist:
             w.add_text(midx + 10, midy, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT", rotation=90, center=True)
@@ -455,15 +565,27 @@ def _draw_oneway_reinforcement_detail(
         # Üst kenar (START) - süreksiz ise
         if ch_kenar_start and not kisa_start_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, iy0, ix1, iy0 + ext, 2, "REB_KENAR", ch_kenar_start.label())
-            _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/4", offset=40, layer="DIM")
+            # Üst mesnet (kiriş)
+            hook_y = y0 - hook_ext
+            end_y = iy0 + ext
+            
+            _draw_support_rebar_vertical(w, ix0, hook_y, ix1, end_y, 2, "REB_KENAR", ch_kenar_start.label(),
+                                         hook_start=True, hook_len=hook_ext)
+            
+            _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, end_y, "ln1/4", offset=40, layer="DIM")
             w.add_text(midx, iy0 + ext/2 + 10, "boyuna kenar mesnet minAs", height=70, layer="TEXT", rotation=90, center=True)
         
         # Alt kenar (END) - süreksiz ise
         if ch_kenar_end and not kisa_end_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, iy1 - ext, ix1, iy1, 2, "REB_KENAR", ch_kenar_end.label())
-            _draw_dimension_line(w, ix1 + 80, iy1 - ext, ix1 + 80, iy1, "ln2/4", offset=40, layer="DIM")
+            # Alt mesnet
+            start_y = iy1 - ext
+            hook_y = y1 + hook_ext
+            
+            _draw_support_rebar_vertical(w, ix0, start_y, ix1, hook_y, 2, "REB_KENAR", ch_kenar_end.label(),
+                                         hook_end=True, hook_len=hook_ext)
+            
+            _draw_dimension_line(w, ix1 + 80, start_y, ix1 + 80, iy1, "ln2/4", offset=40, layer="DIM")
         
         # --- 4. BOYUNA İÇ MESNET DONATISI (Sürekli Kısa Kenar) ---
         # Kısa kenar = T (iy0) ve B (iy1), donatı uzun kenara paralel → Y yönünde (dikey)
@@ -471,14 +593,14 @@ def _draw_oneway_reinforcement_detail(
         # Üst kenar (START) - sürekli ise
         if ch_ic_start and kisa_start_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, iy0, ix1, iy0 + ext, 2, "REB_IC_MESNET", ch_ic_start.label())
+            _draw_support_rebar_vertical(w, ix0, y0, ix1, iy0 + ext, 2, "REB_IC_MESNET", ch_ic_start.label())
             _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/4", offset=40, layer="DIM")
             w.add_text(midx, iy0 + ext/2 + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", rotation=90, center=True)
         
         # Alt kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
             ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, iy1 - ext, ix1, iy1, 2, "REB_IC_MESNET", ch_ic_end.label())
+            _draw_support_rebar_vertical(w, ix0, iy1 - ext, ix1, y1, 2, "REB_IC_MESNET", ch_ic_end.label())
             _draw_dimension_line(w, ix1 + 80, iy1 - ext, ix1 + 80, iy1, "ln2/4", offset=40, layer="DIM")
         
         # --- 5. MESNET EK DONATISI (Sürekli Uzun Kenar) ---
