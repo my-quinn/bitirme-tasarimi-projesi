@@ -347,16 +347,60 @@ def _draw_oneway_reinforcement_detail(
         
         # Üst kenar (START) - sürekli ise
         if ch_ek_start and uzun_start_cont:
-            ext = Ln_long / 5.0  # ln/5 uzunluk
-            _draw_support_rebar_vertical(w, ix0, iy0, ix1, iy0 + ext, 2, "REB_EK_MESNET", ch_ek_start.label())
-            _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/5", offset=40, layer="DIM")
-            w.add_text(midx, iy0 + 50, "mesnet ek\ndonatısı", height=70, layer="TEXT")
+            L5 = Ln_long / 5.0
+            L10 = Ln_long / 10.0
+            d_crank = 200.0
+            half = bw_mm / 2.0
+            offset_val = 800.0  # Offset to clear overlap
+            
+            # Start from Beam Center (y0 - half)
+            # Pass Beam Face (y0)
+            # Extend L5 from Face (y0 + L5)
+            # Crank (45 degrees)
+            # Extend L10
+            
+            # Note: y0 passed to this function is the slab edge (face of beam if present)
+            beam_center_y = y0 - half
+            
+            # Polyline points
+            # Offset midx by offset_val
+            # Flip crank direction (-d_crank instead of +d_crank)
+            base_x = midx + offset_val
+            
+            pts = [
+                (base_x, beam_center_y),           # Start at beam center
+                (base_x, y0 + L5),                 # To L/5 mark (straight)
+                (base_x - d_crank, y0 + L5 + d_crank), # Crank 45 deg (Flipped: -d_crank)
+                (base_x - d_crank, y0 + L5 + d_crank + L10) # Continue L/10
+            ]
+            
+            w.add_polyline(pts, layer="REB_EK_MESNET")
+            w.add_text(base_x - d_crank + 20, y0 + L5, f"{ch_ek_start.label()}", height=100, layer="TEXT", rotation=90)
+            _draw_dimension_line(w, ix1 + 80, y0, ix1 + 80, y0 + L5, "ln1/5", offset=40, layer="DIM")
         
         # Alt kenar (END) - sürekli ise
         if ch_ek_end and uzun_end_cont:
-            ext = Ln_long / 5.0
-            _draw_support_rebar_vertical(w, ix0, iy1 - ext, ix1, iy1, 2, "REB_EK_MESNET", ch_ek_end.label())
-            _draw_dimension_line(w, ix1 + 80, iy1 - ext, ix1 + 80, iy1, "ln2/5", offset=40, layer="DIM")
+            L5 = Ln_long / 5.0
+            L10 = Ln_long / 10.0
+            d_crank = 200.0
+            half = bw_mm / 2.0
+            offset_val = 800.0
+            
+            beam_center_y = y1 + half
+            base_x = midx + offset_val
+            
+            # Polyline points (Going Up/Negative Y direction effectively for visual layout, but coordinates decrease)
+            # Flip crank direction (-d_crank instead of +d_crank)
+            pts = [
+                (base_x, beam_center_y),           # Start at beam center
+                (base_x, y1 - L5),                 # To L/5 mark
+                (base_x - d_crank, y1 - L5 - d_crank), # Crank (Flipped: -d_crank)
+                (base_x - d_crank, y1 - L5 - d_crank - L10) # Continue
+            ]
+            
+            w.add_polyline(pts, layer="REB_EK_MESNET")
+            w.add_text(base_x - d_crank + 20, y1 - L5, f"{ch_ek_end.label()}", height=100, layer="TEXT", rotation=90)
+            _draw_dimension_line(w, ix1 + 80, y1 - L5, ix1 + 80, y1, "ln2/5", offset=40, layer="DIM")
     
     else:  # auto_dir == "Y"
         # auto_dir == "Y" → Ly < Lx → Y yönü kısa
@@ -436,16 +480,47 @@ def _draw_oneway_reinforcement_detail(
         
         # Sol kenar (START) - sürekli ise
         if ch_ek_start and uzun_start_cont:
-            ext = Ln_long / 5.0
-            _draw_support_rebar_horizontal(w, ix0, iy0, ix0 + ext, iy1, 2, "REB_EK_MESNET", ch_ek_start.label())
-            _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/5", offset=40, layer="DIM")
-            w.add_text(ix0 + 20, midy, "mesnet ek\ndonatısı", height=70, layer="TEXT", rotation=90)
+            L5 = Ln_long / 5.0
+            L10 = Ln_long / 10.0
+            d_crank = 200.0
+            half = bw_mm / 2.0
+            offset_val = 800.0
+            
+            beam_center_x = x0 - half
+            base_y = midy + offset_val
+            
+            pts = [
+                (beam_center_x, base_y),           # Start at beam center
+                (x0 + L5, base_y),                 # To L/5 mark
+                (x0 + L5 + d_crank, base_y - d_crank), # Crank (Flipped: -d_crank)
+                (x0 + L5 + d_crank + L10, base_y - d_crank) # Continue
+            ]
+            
+            w.add_polyline(pts, layer="REB_EK_MESNET")
+            w.add_text(x0 + L5, base_y - d_crank + 20, f"{ch_ek_start.label()}", height=100, layer="TEXT")
+            _draw_dimension_line(w, x0, iy1 + 80, x0 + L5, iy1 + 80, "ln1/5", offset=40, layer="DIM")
         
         # Sağ kenar (END) - sürekli ise
         if ch_ek_end and uzun_end_cont:
-            ext = Ln_long / 5.0
-            _draw_support_rebar_horizontal(w, ix1 - ext, iy0, ix1, iy1, 2, "REB_EK_MESNET", ch_ek_end.label())
-            _draw_dimension_line(w, ix1 - ext, iy1 + 80, ix1, iy1 + 80, "ln2/5", offset=40, layer="DIM")
+            L5 = Ln_long / 5.0
+            L10 = Ln_long / 10.0
+            d_crank = 200.0
+            half = bw_mm / 2.0
+            offset_val = 800.0
+            
+            beam_center_x = x1 + half
+            base_y = midy + offset_val
+            
+            pts = [
+                (beam_center_x, base_y),           # Start at beam center
+                (x1 - L5, base_y),                 # To L/5 mark
+                (x1 - L5 - d_crank, base_y - d_crank), # Crank (Flipped: -d_crank)
+                (x1 - L5 - d_crank - L10, base_y - d_crank) # Continue
+            ]
+            
+            w.add_polyline(pts, layer="REB_EK_MESNET")
+            w.add_text(x1 - L5, base_y - d_crank + 20, f"{ch_ek_end.label()}", height=100, layer="TEXT")
+            _draw_dimension_line(w, x1 - L5, iy1 + 80, x1, iy1 + 80, "ln2/5", offset=40, layer="DIM")
     
     # Döşeme ID'si
     w.add_text(midx, midy, sid, height=150, layer="TEXT")
