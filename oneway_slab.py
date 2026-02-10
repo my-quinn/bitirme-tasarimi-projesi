@@ -373,8 +373,15 @@ def compute_oneway_report(system, sid: str, res: dict, conc: str, steel: str,
     lines.extend(st_main)
     
     duz, pilye = split_duz_pilye(ch_main)
+    # Düz donatı boyu hesabı: Lnet + 2*bw (giriş) + 2*bw (kanca) = Lnet + 4*bw
+    # Lnet bilgisi 'res' içinde yok, ama spans listesinde var. Ancak burada 'Mpos' üzerinden geldik.
+    # Yaklaşık olarak temiz açıklık + mesnet genişlikleri diyebiliriz ama
+    # en temizi: Kullanıcıya bilgi olarak "L + 4x bw" (her uçta bw kadar giriş + bw kadar kanca)
+    # Not: bw metre cinsinden
+    L_hook_add = 4.0 * bw * 1000.0 # mm cinsinden ek boy
     lines.append(f"    Ana Donatı: {ch_main.label_with_area()}")
-    lines.append(f"    -> Düz: {duz.label()} (A={duz.area_mm2_per_m:.1f} mm²/m)")
+    lines.append(f"    -> Düz: {duz.label()} (L_net + {L_hook_add:.0f} mm kanca payı)")
+    lines.append(f"       (Detay: Her iki uçta kiriş içine bw={bw*100:.0f}cm giriş + bw={bw*100:.0f}cm aşağı kanca)")
     lines.append(f"    -> Pilye: {pilye.label()} (A={pilye.area_mm2_per_m:.1f} mm²/m)")
     
     # Mesnet momenti için As hesabı (mesnet ek donatısı için kullanılacak)

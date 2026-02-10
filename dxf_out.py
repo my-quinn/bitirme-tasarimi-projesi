@@ -134,6 +134,37 @@ def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0, beam_e
         return pts
 
 
+def _draw_straight_hit_polyline(x0, y0, x1, y1, ext, hook):
+    """
+    Düz donatı için kancalı çizim (Plan görünüşte sembolik).
+    - Kiriş içine 'ext' kadar girer.
+    - Sonra 90 derece 'hook' kadar kırılır.
+    - Yön: 'Legs down' (negatif yön).
+    """
+    if abs(y1 - y0) < 1e-6: # Horizontal (X yönünde)
+        if x1 < x0: x0, x1 = x1, x0
+        # Legs down -> -Y yönünde kanca
+        return [
+            (x0 - ext, y0 - hook),
+            (x0 - ext, y0),
+            (x1 + ext, y0),
+            (x1 + ext, y0 - hook)
+        ]
+    else: # Vertical (Y yönünde)
+        if y1 < y0: y0, y1 = y1, y0
+        # Legs down -> -X yönünde kanca (veya +X? Pilye çizimine uyumlu olsun)
+        # Pilye vb. genelde sağa/sola kırılır. 
+        # Referans "rotated 180 degrees" -> horizontal için bariz "aşağı".
+        # Vertical için "negatif X" (sola) seçelim.
+        return [
+            (x0 - hook, y0 - ext),
+            (x0, y0 - ext),
+            (x0, y1 + ext),
+            (x0 - hook, y1 + ext)
+        ]
+
+
+
 def _draw_dimension_line(w: _DXFWriter, x0, y0, x1, y1, label: str, offset=150.0, layer="DIM"):
     """Ölçü çizgisi çizer (çizgi + etiket)"""
     # Ana çizgi
@@ -256,7 +287,8 @@ def _draw_oneway_reinforcement_detail(
         for i in range(1, rebar_count + 1):
             x = ix0 + i * spacing
             # Düz demir
-            w.add_line(x - rebar_offset, iy0, x - rebar_offset, iy1, layer="REB_DUZ")
+            pts_duz = _draw_straight_hit_polyline(x - rebar_offset, iy0, x - rebar_offset, iy1, bw_mm, bw_mm)
+            w.add_polyline(pts_duz, layer="REB_DUZ")
             # Pilye demir
             pts = _pilye_polyline(x + rebar_offset, iy0, x + rebar_offset, iy1, d=200.0, kink="both", hook_len=bw_mm, beam_ext=bw_mm)
             w.add_polyline(pts, layer="REB_PILYE")
@@ -345,7 +377,8 @@ def _draw_oneway_reinforcement_detail(
         for i in range(1, rebar_count + 1):
             y = iy0 + i * spacing
             # Düz demir
-            w.add_line(ix0, y - rebar_offset, ix1, y - rebar_offset, layer="REB_DUZ")
+            pts_duz = _draw_straight_hit_polyline(ix0, y - rebar_offset, ix1, y - rebar_offset, bw_mm, bw_mm)
+            w.add_polyline(pts_duz, layer="REB_DUZ")
             # Pilye demir
             pts = _pilye_polyline(ix0, y + rebar_offset, ix1, y + rebar_offset, d=200.0, kink="both", hook_len=bw_mm, beam_ext=bw_mm)
             w.add_polyline(pts, layer="REB_PILYE")
