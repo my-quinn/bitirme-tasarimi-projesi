@@ -40,14 +40,13 @@ class _DXFWriter:
 # Donatı Çizim Yardımcı Fonksiyonları
 # =========================================================
 
-def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0):
+def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0, beam_ext=0.0):
     """
-    Pilye çubuğu çizer - 180 derece döndürülmüş:
-    - Kiriş ekseninde altta düz başlar
-    - Sağa ve sola Ln/5 mesafesinde düz gider
-    - Ln/5 mesafesinde 45 derece yukarı kırılır
-    - Üstte düz devam eder (komşu açıklığa Ln/4 uzanır)
-    - Uçlarda yukarı doğru kanca yapar
+    Pilye çubuğu çizer:
+    - Üst seviyede Ln/5 + beam_ext kadar düz gider (beam_ext kısmı kirişin içinde)
+    - Ln/5 noktasında 45 derece kırılır
+    - Alt seviyede düz devam eder
+    - Uçlarda kiriş içine doğru kanca yapar
     
     kink parametresi:
     - "start": sol/alt tarafta kırılma
@@ -56,7 +55,8 @@ def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0):
     - "none": düz çubuk
     
     d: pilye kırılma yüksekliği (45 derece için dx=dy=d)
-    hook_len: kanca uzunluğu
+    hook_len: kanca uzunluğu (kiriş içine doğru)
+    beam_ext: kiriş içine uzanma mesafesi (kanca kırılma noktası kirişin içinde olur)
     """
     kink = (kink or "both").lower()
     if kink not in ("start", "end", "both", "none"): kink = "both"
@@ -78,20 +78,20 @@ def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0):
         pts = []
         
         if want_start:
-            # Sol taraf: kanca ile başla (yukarı), düz git, Ln/5'te 45 derece aşağı kırıl
-            pts.append((x0, y0 + hook_len))       # Kanca ucu (yukarıda)
-            pts.append((x0, y0))                  # Kanca dönüşü (üstte)
-            pts.append((x0 + Ln5 - d, y0))        # Üstte düz git
-            pts.append((x0 + Ln5, y0 - d))        # 45 derece aşağı kırıl (alta indi)
+            # Sol taraf: kanca kirişin içinde, beam_ext kadar sola uzanır
+            pts.append((x0 - beam_ext, y0 - hook_len))  # Kanca ucu (kiriş içinde)
+            pts.append((x0 - beam_ext, y0))              # Kanca dönüşü (kiriş içinde)
+            pts.append((x0 + Ln5 - d, y0))               # Üstte düz git
+            pts.append((x0 + Ln5, y0 - d))               # 45 derece aşağı kırıl
         else:
             pts.append((x0, y0 - d))              # Altta düz başla
         
         if want_end:
-            # Sağ taraf: altta düz git, Ln/5'te 45 derece yukarı kırıl, kanca ile bit
-            pts.append((x1 - Ln5, y0 - d))        # Altta düz kısım sonu
-            pts.append((x1 - Ln5 + d, y0))        # 45 derece yukarı kırıl (üste çıktı)
-            pts.append((x1, y0))                  # Üstte düz bit
-            pts.append((x1, y0 + hook_len))       # Kanca ucu (yukarıda)
+            # Sağ taraf: altta düz git, yukarı kırıl, beam_ext kadar sağa uzanır
+            pts.append((x1 - Ln5, y0 - d))               # Altta düz kısım sonu
+            pts.append((x1 - Ln5 + d, y0))               # 45 derece yukarı kırıl
+            pts.append((x1 + beam_ext, y0))               # Üstte düz bit (kiriş içine)
+            pts.append((x1 + beam_ext, y0 - hook_len))   # Kanca ucu (kiriş içinde)
         else:
             pts.append((x1, y0 - d))              # Altta düz bit
         
@@ -114,20 +114,20 @@ def _pilye_polyline(x0, y0, x1, y1, d=250.0, kink="both", hook_len=100.0):
         pts = []
         
         if want_start:
-            # Alt taraf: kanca ile başla (sola), düz git, Ln/5'te 45 derece sağa kırıl
-            pts.append((x0 - hook_len, y0))       # Kanca ucu (solda)
-            pts.append((x0, y0))                  # Kanca dönüşü (solda)
-            pts.append((x0, y0 + Ln5 - d))        # Solda düz git
-            pts.append((x0 + d, y0 + Ln5))        # 45 derece sağa kırıl (sağa çıktı)
+            # Alt taraf: kanca kirişin içinde, beam_ext kadar aşağı uzanır
+            pts.append((x0 + hook_len, y0 - beam_ext))  # Kanca ucu (kiriş içinde)
+            pts.append((x0, y0 - beam_ext))              # Kanca dönüşü (kiriş içinde)
+            pts.append((x0, y0 + Ln5 - d))               # Solda düz git
+            pts.append((x0 + d, y0 + Ln5))               # 45 derece sağa kırıl
         else:
             pts.append((x0 + d, y0))              # Sağda düz başla
         
         if want_end:
-            # Üst taraf: sağda düz git, Ln/5'te 45 derece sola kırıl, kanca ile bit
-            pts.append((x0 + d, y1 - Ln5))        # Sağda düz kısım sonu
-            pts.append((x0, y1 - Ln5 + d))        # 45 derece sola kırıl (sola indi)
-            pts.append((x0, y1))                  # Solda düz bit
-            pts.append((x0 - hook_len, y1))       # Kanca ucu (solda)
+            # Üst taraf: sağda düz git, sola kırıl, beam_ext kadar yukarı uzanır
+            pts.append((x0 + d, y1 - Ln5))               # Sağda düz kısım sonu
+            pts.append((x0, y1 - Ln5 + d))               # 45 derece sola kırıl
+            pts.append((x0, y1 + beam_ext))               # Solda düz bit (kiriş içine)
+            pts.append((x0 + hook_len, y1 + beam_ext))   # Kanca ucu (kiriş içinde)
         else:
             pts.append((x0 + d, y1))              # Sağda düz bit
         
@@ -250,12 +250,15 @@ def _draw_oneway_reinforcement_detail(
         rebar_count = 3
         spacing = Lx / (rebar_count + 1)
         
+        # Düz-pilye arası offset (aralık değeri kadar)
+        rebar_offset = ch_duz.s_mm if ch_duz else (ch_pilye.s_mm if ch_pilye else 60)
+        
         for i in range(1, rebar_count + 1):
             x = ix0 + i * spacing
             # Düz demir
-            w.add_line(x - 30, iy0, x - 30, iy1, layer="REB_DUZ")
+            w.add_line(x - rebar_offset, iy0, x - rebar_offset, iy1, layer="REB_DUZ")
             # Pilye demir
-            pts = _pilye_polyline(x, iy0, x, iy1, d=200.0, kink="both")
+            pts = _pilye_polyline(x + rebar_offset, iy0, x + rebar_offset, iy1, d=200.0, kink="both", hook_len=bw_mm, beam_ext=bw_mm)
             w.add_polyline(pts, layer="REB_PILYE")
         
         # Etiketler
@@ -336,12 +339,15 @@ def _draw_oneway_reinforcement_detail(
         rebar_count = 3
         spacing = Ly / (rebar_count + 1)
         
+        # Düz-pilye arası offset (aralık değeri kadar)
+        rebar_offset = ch_duz.s_mm if ch_duz else (ch_pilye.s_mm if ch_pilye else 60)
+        
         for i in range(1, rebar_count + 1):
             y = iy0 + i * spacing
             # Düz demir
-            w.add_line(ix0, y - 30, ix1, y - 30, layer="REB_DUZ")
+            w.add_line(ix0, y - rebar_offset, ix1, y - rebar_offset, layer="REB_DUZ")
             # Pilye demir
-            pts = _pilye_polyline(ix0, y, ix1, y, d=200.0, kink="both")
+            pts = _pilye_polyline(ix0, y + rebar_offset, ix1, y + rebar_offset, d=200.0, kink="both", hook_len=bw_mm, beam_ext=bw_mm)
             w.add_polyline(pts, layer="REB_PILYE")
         
         if ch_duz:
