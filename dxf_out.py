@@ -368,8 +368,9 @@ def _draw_oneway_reinforcement_detail(
                 pts.append((d_start, y - hook_ext)) # Kanca ucu (kiriş içinde, aşağı doğru)
                 pts.append((d_start, y))            # Kanca dirsek
             else:
-                # Continuous: Start at inner edge (no hook)
-                d_start = ix0 # Use slab edge
+                # Continuous: Straight extension into beam (no hook)
+                # Extend into beam by hook_ext
+                d_start = x0 - hook_ext
                 pts.append((d_start, y))
             
             # Sağ taraf (Check continuity)
@@ -379,8 +380,9 @@ def _draw_oneway_reinforcement_detail(
                 pts.append((d_end, y))              # Dirsek
                 pts.append((d_end, y - hook_ext))   # Kanca ucu
             else:
-                # Continuous: End at inner edge (no hook)
-                d_end = ix1 # Use slab edge
+                # Continuous: Straight extension into beam (no hook)
+                # Extend into beam by hook_ext
+                d_end = x1 + hook_ext
                 pts.append((d_end, y))
                 
             w.add_polyline(pts, layer="REB_DIST")
@@ -582,8 +584,9 @@ def _draw_oneway_reinforcement_detail(
                 pts.append((x - hook_ext, d_start)) # Kanca ucu (kiriş içinde, sola/negatif x)
                 pts.append((x, d_start))            # Kanca dirsek
             else:
-                # Continuous: Start at inner edge (no hook)
-                d_start = iy0
+                # Continuous: Straight extension into beam (no hook)
+                # Extend into beam by hook_ext
+                d_start = y0 - hook_ext
                 pts.append((x, d_start))
                 
             # Alt uç (END/Bottom) -> Bottom (Check continuity)
@@ -593,8 +596,9 @@ def _draw_oneway_reinforcement_detail(
                 pts.append((x, d_end))              # Dirsek
                 pts.append((x - hook_ext, d_end))   # Kanca ucu
             else:
-                # Continuous: End at inner edge (no hook)
-                d_end = iy1
+                # Continuous: Straight extension into beam (no hook)
+                # Extend straight into beam by hook_ext
+                d_end = y1 + hook_ext
                 pts.append((x, d_end))
                 
             w.add_polyline(pts, layer="REB_DIST")
