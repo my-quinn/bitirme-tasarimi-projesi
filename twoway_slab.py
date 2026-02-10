@@ -20,13 +20,13 @@ def slab_edge_has_beam(system, sid: str, edge: str) -> bool:
     i0, j0, i1, j1 = s.bbox()
     edge = edge.upper()
     if edge == "LEFT":
-        return (i0 != 0) and system.is_beam_gridline_for_slab(sid, "X", i0)
+        return system.is_beam_gridline_for_slab(sid, "X", i0)
     if edge == "RIGHT":
-        return (i1 < system.Nx - 1) and system.is_beam_gridline_for_slab(sid, "X", i1 + 1)
+        return system.is_beam_gridline_for_slab(sid, "X", i1 + 1)
     if edge == "TOP":
-        return (j0 != 0) and system.is_beam_gridline_for_slab(sid, "Y", j0)
+        return system.is_beam_gridline_for_slab(sid, "Y", j0)
     if edge == "BOTTOM":
-        return (j1 < system.Ny - 1) and system.is_beam_gridline_for_slab(sid, "Y", j1 + 1)
+        return system.is_beam_gridline_for_slab(sid, "Y", j1 + 1)
     return False
 
 

@@ -24,13 +24,17 @@ class _DXFWriter:
         self.add_layer(layer)
         self.msp.add_lwpolyline(pts, dxfattribs={'layer': layer}, close=closed)
 
-    def add_text(self, x, y, text, height=200.0, layer="TEXT", rotation=0.0):
+    def add_text(self, x, y, text, height=200.0, layer="TEXT", rotation=0.0, center=False):
         self.add_layer(layer)
-        self.msp.add_text(text, dxfattribs={
+        txt = self.msp.add_text(text, dxfattribs={
             'layer': layer,
             'height': height,
             'rotation': rotation
-        }).set_placement((x, y))
+        })
+        if center:
+            txt.set_placement((x, y), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+        else:
+            txt.set_placement((x, y))
 
     def save(self, path: str):
         self.doc.saveas(path)
@@ -293,11 +297,11 @@ def _draw_oneway_reinforcement_detail(
             pts = _pilye_polyline(x + rebar_offset, iy0, x + rebar_offset, iy1, d=200.0, kink="both", hook_len=bw_mm, beam_ext=bw_mm)
             w.add_polyline(pts, layer="REB_PILYE")
         
-        # Etiketler
+        # Etiketler - orta çubuğun tam ortasında, 10mm sağında
         if ch_duz:
-            w.add_text(midx - 150, iy0 + 100, f"düz {ch_duz.label()}", height=100, layer="TEXT", rotation=90)
+            w.add_text(midx - rebar_offset + 10, midy, f"düz {ch_duz.label()}", height=100, layer="TEXT", rotation=90, center=True)
         if ch_pilye:
-            w.add_text(midx + 100, iy0 + 100, f"pilye {ch_pilye.label()}", height=100, layer="TEXT", rotation=90)
+            w.add_text(midx + rebar_offset + 10, midy, f"pilye {ch_pilye.label()}", height=100, layer="TEXT", rotation=90, center=True)
         
         # --- 2. DAĞITMA DONATISI - Yatay (uzun kenara paralel) ---
         dist_count = 3
@@ -307,8 +311,8 @@ def _draw_oneway_reinforcement_detail(
             w.add_line(ix0, y, ix1, y, layer="REB_DIST")
         
         if ch_dist:
-            w.add_text(ix0 + 100, midy + 50, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT")
-            w.add_text(ix0 + 100, midy - 100, f"As/5", height=80, layer="TEXT")
+            w.add_text(midx, midy + 10, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT", center=True)
+            w.add_text(midx, midy - 100, f"As/5", height=80, layer="TEXT", center=True)
         
         # --- 3. BOYUNA KENAR MESNET DONATISI (Süreksiz Kısa Kenar) ---
         # Kısa kenar = L (ix0) ve R (ix1), donatı uzun kenara paralel → X yönünde (yatay)
@@ -318,7 +322,7 @@ def _draw_oneway_reinforcement_detail(
             ext = Ln_short / 4.0  # ln/4 uzunluk
             _draw_support_rebar_horizontal(w, ix0, iy0, ix0 + ext, iy1, 2, "REB_KENAR", ch_kenar_start.label())
             _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/4", offset=40, layer="DIM")
-            w.add_text(ix0 + 20, midy, "boyuna kenar\nmesnet donatısı\nminAs", height=70, layer="TEXT", rotation=90)
+            w.add_text(ix0 + ext/2, midy + 10, "boyuna kenar mesnet minAs", height=70, layer="TEXT", center=True)
         
         # Sağ kenar (END) - süreksiz ise
         if ch_kenar_end and not kisa_end_cont:
@@ -334,7 +338,7 @@ def _draw_oneway_reinforcement_detail(
             ext = Ln_short / 4.0
             _draw_support_rebar_horizontal(w, ix0, iy0, ix0 + ext, iy1, 2, "REB_IC_MESNET", ch_ic_start.label())
             _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/4", offset=40, layer="DIM")
-            w.add_text(ix0 + 20, midy, "boyuna iç mesnet\ndonatısı 0.6×As", height=70, layer="TEXT", rotation=90)
+            w.add_text(ix0 + ext/2, midy + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", center=True)
         
         # Sağ kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
@@ -375,7 +379,8 @@ def _draw_oneway_reinforcement_detail(
             ]
             
             w.add_polyline(pts, layer="REB_EK_MESNET")
-            w.add_text(base_x - d_crank + 20, y0 + L5, f"{ch_ek_start.label()}", height=100, layer="TEXT", rotation=90)
+            ek_mid_y = (beam_center_y + y0 + L5 + d_crank + L10) / 2.0
+            w.add_text(base_x + 10, ek_mid_y, f"{ch_ek_start.label()}", height=100, layer="TEXT", rotation=90, center=True)
             _draw_dimension_line(w, ix1 + 80, y0, ix1 + 80, y0 + L5, "ln1/5", offset=40, layer="DIM")
         
         # Alt kenar (END) - sürekli ise
@@ -399,7 +404,8 @@ def _draw_oneway_reinforcement_detail(
             ]
             
             w.add_polyline(pts, layer="REB_EK_MESNET")
-            w.add_text(base_x - d_crank + 20, y1 - L5, f"{ch_ek_end.label()}", height=100, layer="TEXT", rotation=90)
+            ek_mid_y = (beam_center_y + y1 - L5 - d_crank - L10) / 2.0
+            w.add_text(base_x + 10, ek_mid_y, f"{ch_ek_end.label()}", height=100, layer="TEXT", rotation=90, center=True)
             _draw_dimension_line(w, ix1 + 80, y1 - L5, ix1 + 80, y1, "ln2/5", offset=40, layer="DIM")
     
     else:  # auto_dir == "Y"
@@ -428,9 +434,9 @@ def _draw_oneway_reinforcement_detail(
             w.add_polyline(pts, layer="REB_PILYE")
         
         if ch_duz:
-            w.add_text(ix0 + 100, midy - 150, f"düz {ch_duz.label()}", height=100, layer="TEXT")
+            w.add_text(midx, midy - rebar_offset + 10, f"düz {ch_duz.label()}", height=100, layer="TEXT", center=True)
         if ch_pilye:
-            w.add_text(ix0 + 100, midy + 100, f"pilye {ch_pilye.label()}", height=100, layer="TEXT")
+            w.add_text(midx, midy + rebar_offset + 10, f"pilye {ch_pilye.label()}", height=100, layer="TEXT", center=True)
         
         # --- 2. DAĞITMA DONATISI - Dikey (uzun kenara paralel) ---
         dist_count = 3
@@ -440,8 +446,8 @@ def _draw_oneway_reinforcement_detail(
             w.add_line(x, iy0, x, iy1, layer="REB_DIST")
         
         if ch_dist:
-            w.add_text(midx + 50, iy1 - 150, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT", rotation=90)
-            w.add_text(midx - 200, iy1 - 150, f"As/5", height=80, layer="TEXT", rotation=90)
+            w.add_text(midx + 10, midy, f"dağıtma {ch_dist.label()}", height=100, layer="TEXT", rotation=90, center=True)
+            w.add_text(midx - 100, midy, f"As/5", height=80, layer="TEXT", rotation=90, center=True)
         
         # --- 3. BOYUNA KENAR MESNET DONATISI (Süreksiz Kısa Kenar) ---
         # Kısa kenar = T (iy0) ve B (iy1), donatı uzun kenara paralel → Y yönünde (dikey)
@@ -451,7 +457,7 @@ def _draw_oneway_reinforcement_detail(
             ext = Ln_short / 4.0
             _draw_support_rebar_vertical(w, ix0, iy0, ix1, iy0 + ext, 2, "REB_KENAR", ch_kenar_start.label())
             _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/4", offset=40, layer="DIM")
-            w.add_text(midx, iy0 + 20, "boyuna kenar\nmesnet donatısı\nminAs", height=70, layer="TEXT")
+            w.add_text(midx, iy0 + ext/2 + 10, "boyuna kenar mesnet minAs", height=70, layer="TEXT", rotation=90, center=True)
         
         # Alt kenar (END) - süreksiz ise
         if ch_kenar_end and not kisa_end_cont:
@@ -467,7 +473,7 @@ def _draw_oneway_reinforcement_detail(
             ext = Ln_short / 4.0
             _draw_support_rebar_vertical(w, ix0, iy0, ix1, iy0 + ext, 2, "REB_IC_MESNET", ch_ic_start.label())
             _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/4", offset=40, layer="DIM")
-            w.add_text(midx, iy0 + 20, "boyuna iç mesnet\ndonatısı 0.6×As", height=70, layer="TEXT")
+            w.add_text(midx, iy0 + ext/2 + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", rotation=90, center=True)
         
         # Alt kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
@@ -497,7 +503,8 @@ def _draw_oneway_reinforcement_detail(
             ]
             
             w.add_polyline(pts, layer="REB_EK_MESNET")
-            w.add_text(x0 + L5, base_y - d_crank + 20, f"{ch_ek_start.label()}", height=100, layer="TEXT")
+            ek_mid_x = (beam_center_x + x0 + L5 + d_crank + L10) / 2.0
+            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_start.label()}", height=100, layer="TEXT", center=True)
             _draw_dimension_line(w, x0, iy1 + 80, x0 + L5, iy1 + 80, "ln1/5", offset=40, layer="DIM")
         
         # Sağ kenar (END) - sürekli ise
@@ -519,14 +526,18 @@ def _draw_oneway_reinforcement_detail(
             ]
             
             w.add_polyline(pts, layer="REB_EK_MESNET")
-            w.add_text(x1 - L5, base_y - d_crank + 20, f"{ch_ek_end.label()}", height=100, layer="TEXT")
+            ek_mid_x = (beam_center_x + x1 - L5 - d_crank - L10) / 2.0
+            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_end.label()}", height=100, layer="TEXT", center=True)
             _draw_dimension_line(w, x1 - L5, iy1 + 80, x1, iy1 + 80, "ln2/5", offset=40, layer="DIM")
     
     # Döşeme ID'si
-    w.add_text(midx, midy, sid, height=150, layer="TEXT")
+    w.add_text(midx, midy, sid, height=150, layer="TEXT", center=True)
 
 
-def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val: float):
+def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val: float,
+                  real_slabs: dict = None):
+    from twoway_slab import slab_edge_has_beam
+
     w = _DXFWriter()
     
     # Katmanları ekle
@@ -539,112 +550,181 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
     for ln in layers:
         w.add_layer(ln)
 
-    gdx, gdy = 0.0, 0.0
-    if system.slabs:
-        s0 = list(system.slabs.values())[0]
-        gdx, gdy = s0.dx, s0.dy
-    else:
-        gdx, gdy = 0.25, 0.25  # fallback
-
     bw_mm = bw_val * 1000.0
     half = bw_mm / 2.0
 
-    # BEAMS - Kiriş çizimi
-    for (i, j) in system.V_beam:
-        x = (i + 1) * gdx * 1000.0
-        y0 = j * gdy * 1000.0
-        y1 = (j + 1) * gdy * 1000.0
-        w.add_polyline([(x - half, y0), (x + half, y0), (x + half, y1), (x - half, y1)], layer="BEAM", closed=True)
-    
-    for (i, j) in system.H_beam:
-        y = (j + 1) * gdy * 1000.0
-        x0 = i * gdx * 1000.0
-        x1 = (i + 1) * gdx * 1000.0
-        w.add_polyline([(x0, y - half), (x1, y - half), (x1, y + half), (x0, y + half)], layer="BEAM", closed=True)
+    if not system.slabs:
+        w.save(filename)
+        return
 
-    # SLABS - Döşeme çizimi
-    for sid, s in system.slabs.items():
-        # Panel sınırları
-        x0 = s.i0 * s.dx * 1000.0
-        y0 = s.j0 * s.dy * 1000.0
-        x1 = (s.i1 + 1) * s.dx * 1000.0
-        y1 = (s.j1 + 1) * s.dy * 1000.0
+    # Döşemeleri pozisyonuna göre sırala (soldan sağa)
+    sorted_sids = sorted(system.slabs.keys(),
+                         key=lambda sid: (system.slabs[sid].i0, system.slabs[sid].j0))
+
+    # ======================================================================
+    # Her döşemeyi gerçek konumuna göre yerleştir
+    # Kiriş olan kenarlara bw/2 ekle → Lx = Lxnet + bw etkisi
+    # ======================================================================
+    # Çizilmiş kirişleri takip et (aynı kirişi iki kez çizmemek için)
+    drawn_beams = set()
+
+    for idx, sid in enumerate(sorted_sids):
+        s = system.slabs[sid]
+        Lx_m, Ly_m = s.size_m_gross()
+
+        # Kenar kiriş durumlarını kontrol et
+        has_left = slab_edge_has_beam(system, sid, "LEFT")
+        has_right = slab_edge_has_beam(system, sid, "RIGHT")
+        has_top = slab_edge_has_beam(system, sid, "TOP")
+        has_bottom = slab_edge_has_beam(system, sid, "BOTTOM")
+
+
+            
+        # =========================================================
+        # Yeni Mantık (Kullanıcı İsteği):
+        # Girdi Lx/Ly = Aks-aks mesafesi (brüt) kabul edilir.
+        # Net döşeme = Brüt - (varsa kiriş/2)
+        # Kirişler = Akslar üzerine oturtulur.
+        # =========================================================
         
-        # Kiriş için düzeltme
-        if system.slab_edge_has_beam(sid, "LEFT"): x0 += half
-        if system.slab_edge_has_beam(sid, "RIGHT"): x1 -= half
-        if system.slab_edge_has_beam(sid, "TOP"): y0 += half
-        if system.slab_edge_has_beam(sid, "BOTTOM"): y1 -= half
-        
+        # Grid hatları (Brüt sınırlar) - mm cinsinden
+        if real_slabs and sid in real_slabs:
+            rs = real_slabs[sid]
+            grid_x0 = rs.x * 1000.0
+            grid_y0 = rs.y * 1000.0
+            grid_x1 = grid_x0 + (rs.w * 1000.0)
+            grid_y1 = grid_y0 + (rs.h * 1000.0)
+        else:
+            # Fallback (yan yana diz)
+            # Bu modda Lx net kabul ediliyordu eskiden, ama tutarlılık için
+            # burayı da brüt gibi düşünebiliriz veya olduğu gibi bırakabiliriz.
+            # Şimdilik basitçe yan yana koyuyoruz.
+            grid_x0 = idx * (Lx_m * 1000.0) 
+            grid_y0 = 0.0
+            grid_x1 = grid_x0 + (Lx_m * 1000.0)
+            grid_y1 = grid_y0 + (Ly_m * 1000.0)
+
+        # Net Döşeme Koordinatları (Shrink)
+        # Kiriş olan kenarlardan içeri çek
+        x0 = grid_x0 + (half if has_left else 0)
+        y0 = grid_y0 + (half if has_top else 0)
+        x1 = grid_x1 - (half if has_right else 0)
+        y1 = grid_y1 - (half if has_bottom else 0)
+
         # Döşeme sınır çizgisi
-        w.add_polyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], layer="SLAB_EDGE", closed=True)
+        w.add_polyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)],
+                       layer="SLAB_EDGE", closed=True)
+
+        # Kirişleri Çiz (Grid hatları üzerine ortalanmış)
+        # Her kiriş, aks boyunca (grid_x/y) tam boyutta çizilir.
+        
+        if has_left:
+            # Sol Dikey Kiriş: grid_x0 üzerinde
+            beam_key = ("V", round(grid_x0, 1), round(grid_y0, 1), round(grid_y1, 1))
+            if beam_key not in drawn_beams:
+                drawn_beams.add(beam_key)
+                w.add_polyline([
+                    (grid_x0 - half, grid_y0), (grid_x0 + half, grid_y0),
+                    (grid_x0 + half, grid_y1), (grid_x0 - half, grid_y1)
+                ], layer="BEAM", closed=True)
+
+        if has_right:
+            # Sağ Dikey Kiriş: grid_x1 üzerinde
+            beam_key = ("V", round(grid_x1, 1), round(grid_y0, 1), round(grid_y1, 1))
+            if beam_key not in drawn_beams:
+                drawn_beams.add(beam_key)
+                w.add_polyline([
+                    (grid_x1 - half, grid_y0), (grid_x1 + half, grid_y0),
+                    (grid_x1 + half, grid_y1), (grid_x1 - half, grid_y1)
+                ], layer="BEAM", closed=True)
+
+        if has_top:
+            # Üst Yatay Kiriş: grid_y0 üzerinde
+            beam_key = ("H", round(grid_x0, 1), round(grid_y0, 1), round(grid_x1, 1))
+            if beam_key not in drawn_beams:
+                drawn_beams.add(beam_key)
+                w.add_polyline([
+                    (grid_x0, grid_y0 - half), (grid_x1, grid_y0 - half),
+                    (grid_x1, grid_y0 + half), (grid_x0, grid_y0 + half)
+                ], layer="BEAM", closed=True)
+
+        if has_bottom:
+            # Alt Yatay Kiriş: grid_y1 üzerinde
+            beam_key = ("H", round(grid_x0, 1), round(grid_y1, 1), round(grid_x1, 1))
+            if beam_key not in drawn_beams:
+                drawn_beams.add(beam_key)
+                w.add_polyline([
+                    (grid_x0, grid_y1 - half), (grid_x1, grid_y1 - half),
+                    (grid_x1, grid_y1 + half), (grid_x0, grid_y1 + half)
+                ], layer="BEAM", closed=True)
+
+        # Döşeme ismi - sol üst köşeden 50mm sağ, 100mm aşağı
+        w.add_text(x0 + 50, y1 - 100, sid, height=125, layer="TEXT")
 
         dcache = design_cache.get(sid)
         if not dcache:
-            w.add_text((x0+x1)/2, (y0+y1)/2, sid, height=300.0, layer="TEXT")
             continue
 
         kind = dcache.get("kind")
-        
+
         if kind == "ONEWAY":
-            # Detaylı tek doğrultulu döşeme çizimi
             _draw_oneway_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm)
-        
+
         elif kind == "TWOWAY":
-            # İki doğrultulu döşeme - mevcut basit çizim
             cover = float(dcache.get("cover_mm", 25.0))
             ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
-            if ix1 <= ix0 or iy1 <= iy0: continue
-            
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+
             midx = (ix0 + ix1) / 2.0
             midy = (iy0 + iy1) / 2.0
-            
+
             chx = dcache["choices"].get("x_span")
             chy = dcache["choices"].get("y_span")
-            
+
             if chx:
                 ptsx = _pilye_polyline(ix0, midy, ix1, midy, d=250.0, kink='both')
                 w.add_polyline(ptsx, layer="REB_MAIN_X")
-                w.add_text(ix0, midy + 250, f"X {chx.label()}", height=280, layer="TEXT")
-            
+                # Etiket: orta noktadan 500mm sola
+                w.add_text(midx - 500, midy + 10, f"X {chx.label()}", height=125,
+                           layer="TEXT", center=True)
+
             if chy:
                 ptsy = _pilye_polyline(midx, iy0, midx, iy1, d=250.0, kink='both')
                 w.add_polyline(ptsy, layer="REB_MAIN_Y")
-                w.add_text(midx + 200, iy1 + 200, f"Y {chy.label()}", height=280, layer="TEXT")
-            
-            w.add_text(midx, midy, sid, height=300, layer="TEXT")
+                # Etiket: orta noktadan 500mm sola, dikey yazı
+                w.add_text(midx - 500, midy, f"Y {chy.label()}", height=125,
+                           layer="TEXT", rotation=90, center=True)
 
         elif kind == "BALCONY":
-            # Balkon - mevcut basit çizim
             cover = float(dcache.get("cover_mm", 25.0))
             ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
-            if ix1 <= ix0 or iy1 <= iy0: continue
-            
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+
             midx = (ix0 + ix1) / 2.0
             midy = (iy0 + iy1) / 2.0
-            
+
             ch_main = dcache["choices"].get("main")
             ch_dist = dcache["choices"].get("dist")
             fixed = dcache.get("fixed_edge", "L")
-            
+
             if ch_main:
                 if fixed in ("L", "R"):
                     kink = "start" if fixed == "L" else "end"
                     pts = _pilye_polyline(ix0, midy, ix1, midy, d=250.0, kink=kink)
                     w.add_polyline(pts, layer="REB_SUPPORT")
-                    w.add_text(ix0, midy + 250, f"ana {ch_main.label()}", height=280, layer="TEXT")
+                    # Etiket: orta noktadan 500mm sola
+                    w.add_text(midx - 500, midy + 10, f"ana {ch_main.label()}",
+                               height=125, layer="TEXT", center=True)
                     w.add_line(midx, iy0, midx, iy1, layer="REB_DIST")
                 else:
                     kink = "end" if fixed == "T" else "start"
                     pts = _pilye_polyline(midx, iy0, midx, iy1, d=250.0, kink=kink)
                     w.add_polyline(pts, layer="REB_SUPPORT")
-                    w.add_text(midx + 200, iy0, f"ana {ch_main.label()}", height=280, layer="TEXT")
+                    # Etiket: orta noktadan 500mm sola, dikey yazı
+                    w.add_text(midx - 500, midy, f"ana {ch_main.label()}",
+                               height=125, layer="TEXT", rotation=90, center=True)
                     w.add_line(ix0, midy, ix1, midy, layer="REB_DIST")
-            
-            w.add_text(midx, midy, sid, height=300, layer="TEXT")
-        
-        else:
-            # Bilinmeyen tip - sadece ID yaz
-            w.add_text((x0+x1)/2, (y0+y1)/2, sid, height=300.0, layer="TEXT")
 
     w.save(filename)

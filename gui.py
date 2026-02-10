@@ -856,7 +856,8 @@ class App(tk.Tk):
             fname += ".dxf"
 
         try:
-            export_to_dxf(self.system, fname, self.last_design, self.bw.get())
+            export_to_dxf(self.system, fname, self.last_design, self.bw.get(),
+                          real_slabs=self.real_slabs)
             messagebox.showinfo("OK", f"Kaydedildi: {fname}")
             try:
                 os.startfile(os.path.abspath(fname))

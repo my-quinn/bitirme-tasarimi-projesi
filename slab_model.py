@@ -200,11 +200,11 @@ class SlabSystem:
         direction = direction.upper()
 
         if direction == "X":
-            if g <= 0 or g >= self.Nx: return False
+            if g < 0 or g > self.Nx: return False
             k = g - 1
             return all((k, j) in self.V_beam for j in range(j0, j1 + 1))
         else:
-            if g <= 0 or g >= self.Ny: return False
+            if g < 0 or g > self.Ny: return False
             k = g - 1
             return all((i, k) in self.H_beam for i in range(i0, i1 + 1))
 
