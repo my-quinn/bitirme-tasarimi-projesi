@@ -264,7 +264,8 @@ def _draw_oneway_reinforcement_detail(
     s: Slab,
     dcache: dict,
     x0: float, y0: float, x1: float, y1: float,
-    bw_mm: float
+    bw_mm: float,
+    slab_index: int = 0
 ):
     """
     Tek doğrultulu döşeme için detaylı donatı krokisi çizer.
@@ -349,8 +350,15 @@ def _draw_oneway_reinforcement_detail(
         dy_dist = Ly / (dist_count + 1)
         hook_ext = bw_mm - 30.0
         
+        # Stagger logic: Shift distribution bars by 200mm for odd slab indices
+        stagger_offset = 200.0 if (slab_index % 2 != 0) else 0.0
+        
         for i in range(1, dist_count + 1):
-            y = iy0 + i * dy_dist
+            base_y = iy0 + i * dy_dist
+            y = base_y + stagger_offset
+            
+            # Ensure y is within bounds (optional checking, but usually slab is large enough)
+            
             pts = []
             
             # Sol taraf (Check continuity)
@@ -412,23 +420,54 @@ def _draw_oneway_reinforcement_detail(
         
         # --- 4. BOYUNA İÇ MESNET DONATISI (Sürekli Kısa Kenar) ---
         # Kısa kenar = L (ix0) ve R (ix1), donatı uzun kenara paralel → X yönünde (yatay)
-        # İç mesnetlerde kanca istenmedi, sadece "sürekli" olduğu için düz geçiş varsayılır veya kanca gerekmez.
-        # "boyuna kenar mesnet donatısının kancasını çiz" dendi. İç mesnet için özel bir kanca isteği yok.
-        # Mevcut düz çizgi yeterli.
         
         # Sol kenar (START) - sürekli ise
         if ch_ic_start and kisa_start_cont:
-            ext = Ln_short / 4.0
-            # İç mesnet, düz devam eder. Ancak çizim sınırlarını x0 yapalım ki tam birleşsin.
-            _draw_support_rebar_horizontal(w, x0, iy0, ix0 + ext, iy1, 2, "REB_IC_MESNET", ch_ic_start.label())
-            _draw_dimension_line(w, ix0, iy1 + 80, ix0 + ext, iy1 + 80, "ln1/4", offset=40, layer="DIM")
-            w.add_text(ix0 + ext/2, midy + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", center=True)
+            L4 = Ln_short / 4.0
+            L8 = Ln_short / 8.0
+            d_crank = 200.0
+            # Start at Beam Center (x0 - bw/2)
+            start_x = x0 - (bw_mm / 2.0)
+            
+            count = 2
+            dy = (y1 - y0) / (count + 1)
+            
+            for i in range(1, count + 1):
+                y = y0 + i * dy
+                pts = [
+                    (start_x, y),              # Start at beam center
+                    (x0 + L4, y),              # Straight past edge to Ln/4
+                    (x0 + L4 + d_crank, y - d_crank), # Crank down 45 deg
+                    (x0 + L4 + d_crank + L8, y - d_crank) # Straight Ln/8
+                ]
+                w.add_polyline(pts, layer="REB_IC_MESNET")
+
+            _draw_dimension_line(w, ix0, iy1 + 80, ix0 + L4, iy1 + 80, "ln1/4", offset=40, layer="DIM")
+            w.add_text(ix0 + L4/2, midy + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", center=True)
         
         # Sağ kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
-            ext = Ln_short / 4.0
-            _draw_support_rebar_horizontal(w, ix1 - ext, iy0, x1, iy1, 2, "REB_IC_MESNET", ch_ic_end.label())
-            _draw_dimension_line(w, ix1 - ext, iy1 + 80, ix1, iy1 + 80, "ln2/4", offset=40, layer="DIM")
+            L4 = Ln_short / 4.0
+            L8 = Ln_short / 8.0
+            d_crank = 200.0
+            
+            # Start at Beam Center (x1 + bw/2)
+            start_x = x1 + (bw_mm / 2.0)
+            
+            count = 2
+            dy = (y1 - y0) / (count + 1)
+            
+            for i in range(1, count + 1):
+                y = y0 + i * dy
+                pts = [
+                    (start_x, y),              # Start at beam center
+                    (x1 - L4, y),              # Straight Left past edge to Ln/4
+                    (x1 - L4 - d_crank, y - d_crank), # Crank down
+                    (x1 - L4 - d_crank - L8, y - d_crank) # Straight Left Ln/8
+                ]
+                w.add_polyline(pts, layer="REB_IC_MESNET")
+
+            _draw_dimension_line(w, ix1 - L4, iy1 + 80, ix1, iy1 + 80, "ln2/4", offset=40, layer="DIM")
         
         # --- 5. MESNET EK DONATISI (Sürekli Uzun Kenar) ---
         # Uzun kenar = T (iy0) ve B (iy1), donatı kısa kenara paralel → Y yönünde (dikey)
@@ -527,8 +566,13 @@ def _draw_oneway_reinforcement_detail(
         dx_dist = Lx / (dist_count + 1)
         hook_ext = bw_mm - 30.0
         
+        # Stagger logic: Shift distribution bars by 200mm for odd slab indices
+        stagger_offset = 200.0 if (slab_index % 2 != 0) else 0.0
+        
         for i in range(1, dist_count + 1):
-            x = ix0 + i * dx_dist
+            base_x = ix0 + i * dx_dist
+            x = base_x + stagger_offset
+            
             pts = []
             
             # Üst uç (START/Left in Y logic?) -> Top (Check continuity)
@@ -592,16 +636,54 @@ def _draw_oneway_reinforcement_detail(
         
         # Üst kenar (START) - sürekli ise
         if ch_ic_start and kisa_start_cont:
-            ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, y0, ix1, iy0 + ext, 2, "REB_IC_MESNET", ch_ic_start.label())
-            _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + ext, "ln1/4", offset=40, layer="DIM")
-            w.add_text(midx, iy0 + ext/2 + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", rotation=90, center=True)
+            L4 = Ln_short / 4.0
+            L8 = Ln_short / 8.0
+            d_crank = 200.0
+            
+            # Start at Beam Center (y0 - bw/2)
+            start_y = y0 - (bw_mm / 2.0)
+            
+            count = 2
+            dx = (x1 - x0) / (count + 1)
+            
+            for i in range(1, count + 1):
+                x = x0 + i * dx
+                pts = [
+                    (x, start_y),                   # Start at beam center
+                    (x, y0 + L4),              # Straight Down past edge to Ln/4
+                    (x - d_crank, y0 + L4 + d_crank), # Crank Left/Down? 
+                    # Vertical bar crank usually offsets in X. 
+                    # Let's offset LEFT (-X) for consistency visualization
+                    (x - d_crank, y0 + L4 + d_crank + L8) # Straight Down Ln/8
+                ]
+                w.add_polyline(pts, layer="REB_IC_MESNET")
+
+            _draw_dimension_line(w, ix1 + 80, iy0, ix1 + 80, iy0 + L4, "ln1/4", offset=40, layer="DIM")
+            w.add_text(midx, iy0 + L4/2 + 10, "boyuna iç mesnet 0.6×As", height=70, layer="TEXT", rotation=90, center=True)
         
         # Alt kenar (END) - sürekli ise
         if ch_ic_end and kisa_end_cont:
-            ext = Ln_short / 4.0
-            _draw_support_rebar_vertical(w, ix0, iy1 - ext, ix1, y1, 2, "REB_IC_MESNET", ch_ic_end.label())
-            _draw_dimension_line(w, ix1 + 80, iy1 - ext, ix1 + 80, iy1, "ln2/4", offset=40, layer="DIM")
+            L4 = Ln_short / 4.0
+            L8 = Ln_short / 8.0
+            d_crank = 200.0
+
+            # Start at Beam Center (y1 + bw/2)
+            start_y = y1 + (bw_mm / 2.0)
+            
+            count = 2
+            dx = (x1 - x0) / (count + 1)
+            
+            for i in range(1, count + 1):
+                x = x0 + i * dx
+                pts = [
+                    (x, start_y),                   # Start at beam center
+                    (x, y1 - L4),              # Straight Up past edge to Ln/4
+                    (x - d_crank, y1 - L4 - d_crank), # Crank Left/Up
+                    (x - d_crank, y1 - L4 - d_crank - L8) # Straight Up Ln/8
+                ]
+                w.add_polyline(pts, layer="REB_IC_MESNET")
+            
+            _draw_dimension_line(w, ix1 + 80, iy1 - L4, ix1 + 80, iy1, "ln2/4", offset=40, layer="DIM")
         
         # --- 5. MESNET EK DONATISI (Sürekli Uzun Kenar) ---
         # Uzun kenar = L (ix0) ve R (ix1), donatı kısa kenara paralel → X yönünde (yatay)
@@ -822,7 +904,7 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
         kind = dcache.get("kind")
 
         if kind == "ONEWAY":
-            _draw_oneway_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm)
+            _draw_oneway_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm, slab_index=idx)
 
         elif kind == "TWOWAY":
             cover = float(dcache.get("cover_mm", 25.0))
