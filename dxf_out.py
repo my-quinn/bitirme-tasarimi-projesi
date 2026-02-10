@@ -573,10 +573,16 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
         Lx_m, Ly_m = s.size_m_gross()
 
         # Kenar kiriş durumlarını kontrol et
-        has_left = slab_edge_has_beam(system, sid, "LEFT")
-        has_right = slab_edge_has_beam(system, sid, "RIGHT")
-        has_top = slab_edge_has_beam(system, sid, "TOP")
-        has_bottom = slab_edge_has_beam(system, sid, "BOTTOM")
+        if s.kind == "BALCONY":
+            has_left = False
+            has_right = False
+            has_top = False
+            has_bottom = False
+        else:
+            has_left = True
+            has_right = True
+            has_top = True
+            has_bottom = True
 
 
             
@@ -617,45 +623,71 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
 
         # Kirişleri Çiz (Grid hatları üzerine ortalanmış)
         # Her kiriş, aks boyunca (grid_x/y) tam boyutta çizilir.
+        # Kesişim noktalarında üst üste binmeleri sağlamak için uzatmalar (extensions) eklenir.
         
+        ext_left = half if has_left else 0.0
+        ext_right = half if has_right else 0.0
+        ext_top = half if has_top else 0.0
+        ext_bottom = half if has_bottom else 0.0
+
         if has_left:
             # Sol Dikey Kiriş: grid_x0 üzerinde
-            beam_key = ("V", round(grid_x0, 1), round(grid_y0, 1), round(grid_y1, 1))
+            # Yukarı ve aşağı uzantılar: Top/Bottom kiriş varsa onların içine kadar uzan
+            # Aslında köşe birleşiminde "kimin üstte olduğu" DXF'de önemli değil,
+            # sadece taranmış alanın (hatch/solid) veya sınırların birleşimi önemli.
+            # Biz polyline çiziyoruz. Köşede L birleşim varsa:
+            # V-kiriş: [y0 - half, y1 + half] (eğer üst/alt kiriş varsa)
+            # H-kiriş: [x0 - half, x1 + half] (eğer sol/sağ kiriş varsa)
+            # Böylece (x0,y0) köşesinde tam bir kare (w*w) örtüşme olur.
+            
+            y_start = grid_y0 - ext_top
+            y_end = grid_y1 + ext_bottom
+            
+            beam_key = ("V", round(grid_x0, 1), round(y_start, 1), round(y_end, 1))
             if beam_key not in drawn_beams:
                 drawn_beams.add(beam_key)
                 w.add_polyline([
-                    (grid_x0 - half, grid_y0), (grid_x0 + half, grid_y0),
-                    (grid_x0 + half, grid_y1), (grid_x0 - half, grid_y1)
+                    (grid_x0 - half, y_start), (grid_x0 + half, y_start),
+                    (grid_x0 + half, y_end), (grid_x0 - half, y_end)
                 ], layer="BEAM", closed=True)
 
         if has_right:
             # Sağ Dikey Kiriş: grid_x1 üzerinde
-            beam_key = ("V", round(grid_x1, 1), round(grid_y0, 1), round(grid_y1, 1))
+            y_start = grid_y0 - ext_top
+            y_end = grid_y1 + ext_bottom
+            
+            beam_key = ("V", round(grid_x1, 1), round(y_start, 1), round(y_end, 1))
             if beam_key not in drawn_beams:
                 drawn_beams.add(beam_key)
                 w.add_polyline([
-                    (grid_x1 - half, grid_y0), (grid_x1 + half, grid_y0),
-                    (grid_x1 + half, grid_y1), (grid_x1 - half, grid_y1)
+                    (grid_x1 - half, y_start), (grid_x1 + half, y_start),
+                    (grid_x1 + half, y_end), (grid_x1 - half, y_end)
                 ], layer="BEAM", closed=True)
 
         if has_top:
             # Üst Yatay Kiriş: grid_y0 üzerinde
-            beam_key = ("H", round(grid_x0, 1), round(grid_y0, 1), round(grid_x1, 1))
+            x_start = grid_x0 - ext_left
+            x_end = grid_x1 + ext_right
+            
+            beam_key = ("H", round(x_start, 1), round(grid_y0, 1), round(x_end, 1))
             if beam_key not in drawn_beams:
                 drawn_beams.add(beam_key)
                 w.add_polyline([
-                    (grid_x0, grid_y0 - half), (grid_x1, grid_y0 - half),
-                    (grid_x1, grid_y0 + half), (grid_x0, grid_y0 + half)
+                    (x_start, grid_y0 - half), (x_end, grid_y0 - half),
+                    (x_end, grid_y0 + half), (x_start, grid_y0 + half)
                 ], layer="BEAM", closed=True)
 
         if has_bottom:
             # Alt Yatay Kiriş: grid_y1 üzerinde
-            beam_key = ("H", round(grid_x0, 1), round(grid_y1, 1), round(grid_x1, 1))
+            x_start = grid_x0 - ext_left
+            x_end = grid_x1 + ext_right
+            
+            beam_key = ("H", round(x_start, 1), round(grid_y1, 1), round(x_end, 1))
             if beam_key not in drawn_beams:
                 drawn_beams.add(beam_key)
                 w.add_polyline([
-                    (grid_x0, grid_y1 - half), (grid_x1, grid_y1 - half),
-                    (grid_x1, grid_y1 + half), (grid_x0, grid_y1 + half)
+                    (x_start, grid_y1 - half), (x_end, grid_y1 - half),
+                    (x_end, grid_y1 + half), (x_start, grid_y1 + half)
                 ], layer="BEAM", closed=True)
 
         # Döşeme ismi - sol üst köşeden 50mm sağ, 100mm aşağı
