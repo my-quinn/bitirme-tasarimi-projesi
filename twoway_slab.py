@@ -308,24 +308,40 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
             # Süreksiz kenar - mesnet ek donatısı gerekmez
             lines.append(f"  {edge} kenarı: Süreksiz → Mesnet ek donatısı gerekmez")
             continue  # Bu kenarı atla
-        elif neighbor_kind == "BALCONY":
-            As_mevcut = As_pilye_x
-            lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
+            
+        As_pilye_komsu = 0.0
+        neighbor_info = ""
+        
+        if neighbor_kind == "BALCONY":
+            # Balkonda pilye yok ama 'mevcut' olarak kendi pilyemizi mi sayacağız?
+            # Kullanıcı isteği: "sağdaki pilye değeri ile soldaki döşemenin pilye değerini çıkartıp"
+            # Balkon varsa, balkonun pilyesi yoktur (genelde üst donatı vardır).
+            # Ancak kodda önce `As_mevcut = As_pilye_x` denmiş (sadece kendini sayıyor).
+            # Biz yine de komşu pilyeyi 0 alıp devam edelim.
+            neighbor_info = f"BALCONY ({neighbor_id})"
+            # Balkonun üst donatısı aslında mesnet donatısıdır, ama burada 'pilye' olarak geçmiyor.
+            # Güvenli tarafta kalmak için 0 alıyoruz, belki balkonun kendi analizinden bir değer gelmeli.
+            # Şimdilik 0.
         else:
             As_pilye_komsu = neighbor_pilye_areas.get(neighbor_id, 0.0)
-            As_mevcut = As_pilye_x + As_pilye_komsu
-            lines.append(f"  {edge} kenarı: {neighbor_kind} ({neighbor_id}) → Mevcut = {As_pilye_x:.1f} + {As_pilye_komsu:.1f} = {As_mevcut:.1f} mm²/m")
-        
+            neighbor_info = f"{neighbor_kind} ({neighbor_id})"
+            
+        As_mevcut = As_pilye_x + As_pilye_komsu
         As_ek = max(0, asxn - As_mevcut)
+        
+        lines.append(f"  {edge} kenarı: {neighbor_info}")
+        lines.append(f"    Gerekli: {asxn:.1f} - Mevcut: (Kendi:{As_pilye_x:.1f} + Komşu:{As_pilye_komsu:.1f} = {As_mevcut:.1f}) = Fark: {asxn - As_mevcut:.1f}")
+        
         if As_ek > max_As_ek_x:
             max_As_ek_x = As_ek
     
     if max_As_ek_x > 1e-6:
         ch_x_il = select_rebar_min_area(max_As_ek_x, 300)  # Mesnet ek donatısı için smax=300
         if ch_x_il:
-            lines.append(f"  As_ek = {max_As_ek_x:.1f} mm²/m → Ek Donatı: {ch_x_il.label_with_area()}")
+            lines.append(f"  Max As_ek = {max_As_ek_x:.1f} mm²/m → Seçilen Ek Donatı: {ch_x_il.label_with_area()}")
+            lines.append(f"  (Bu donatı gerekli olan tüm X mesnetlerine (L/R) uygulanır.)")
     else:
-        lines.append(f"  Pilye yeterli, ek donatı gerekmiyor")
+        lines.append(f"  Pilye toplamları yeterli, ek donatı gerekmiyor.")
     lines.append("")
     
     # Y mesnet donatısı gereksinimi ve ek donatı kontrolü
@@ -347,25 +363,35 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
             # Süreksiz kenar - mesnet ek donatısı gerekmez
             lines.append(f"  {edge} kenarı: Süreksiz → Mesnet ek donatısı gerekmez")
             continue  # Bu kenarı atla
-        elif neighbor_kind == "BALCONY":
-            As_mevcut = As_pilye_y
-            lines.append(f"  {edge} kenarı: BALCONY ({neighbor_id}) → Mevcut = {As_mevcut:.1f} mm²/m")
+            
+        As_pilye_komsu = 0.0
+        neighbor_info = ""
+        
+        if neighbor_kind == "BALCONY":
+            neighbor_info = f"BALCONY ({neighbor_id})"
         else:
             As_pilye_komsu = neighbor_pilye_areas.get(neighbor_id, 0.0)
-            As_mevcut = As_pilye_y + As_pilye_komsu
-            lines.append(f"  {edge} kenarı: {neighbor_kind} ({neighbor_id}) → Mevcut = {As_pilye_y:.1f} + {As_pilye_komsu:.1f} = {As_mevcut:.1f} mm²/m")
-        
+            neighbor_info = f"{neighbor_kind} ({neighbor_id})"
+            
+        As_mevcut = As_pilye_y + As_pilye_komsu
         As_ek = max(0, asyn - As_mevcut)
+        
+        lines.append(f"  {edge} kenarı: {neighbor_info}")
+        lines.append(f"    Gerekli: {asyn:.1f} - Mevcut: (Kendi:{As_pilye_y:.1f} + Komşu:{As_pilye_komsu:.1f} = {As_mevcut:.1f}) = Fark: {asyn - As_mevcut:.1f}")
+        
         if As_ek > max_As_ek_y:
             max_As_ek_y = As_ek
     
     if max_As_ek_y > 1e-6:
         ch_y_il = select_rebar_min_area(max_As_ek_y, 300)  # Mesnet ek donatısı için smax=300
         if ch_y_il:
-            lines.append(f"  As_ek = {max_As_ek_y:.1f} mm²/m → Ek Donatı: {ch_y_il.label_with_area()}")
+            lines.append(f"  Max As_ek = {max_As_ek_y:.1f} mm²/m → Seçilen Ek Donatı: {ch_y_il.label_with_area()}")
+            lines.append(f"  (Bu donatı gerekli olan tüm Y mesnetlerine (T/B) uygulanır.)")
     else:
-        lines.append(f"  Pilye yeterli, ek donatı gerekmiyor")
+        lines.append(f"  Pilye toplamları yeterli, ek donatı gerekmiyor")
     lines.append("")
+
+    (Lf, Rf, Tf, Bf), _, _ = twoway_edge_continuity_full(system, sid)
 
     design_res = {
         "kind": "TWOWAY", "short_dir": res["short_dir"], "cover_mm": cover,
@@ -378,6 +404,9 @@ def compute_twoway_report(system, sid: str, res: dict, conc: str, steel: str,
             "y_span_pilye": ch_y_pilye,
             "x_support_extra": ch_x_il, 
             "y_support_extra": ch_y_il
+        },
+        "edge_continuity": {
+            "L": Lf, "R": Rf, "T": Tf, "B": Bf
         }
     }
     lines.append(f"SONUÇ: X: {ch_x_duz.label()} düz + {ch_x_pilye.label()} pilye | Y: {ch_y_duz.label()} düz + {ch_y_pilye.label()} pilye")

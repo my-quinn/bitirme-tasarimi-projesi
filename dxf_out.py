@@ -498,62 +498,15 @@ def _draw_oneway_reinforcement_detail(
         
         # Üst kenar (START) - sürekli ise
         if ch_ek_start and uzun_start_cont:
-            L5 = Ln_long / 5.0
-            L10 = Ln_long / 10.0
-            d_crank = 200.0
-            half = bw_mm / 2.0
-            offset_val = 800.0  # Offset to clear overlap
-            
-            # Start from Beam Center (y0 - half)
-            # Pass Beam Face (y0)
-            # Extend L5 from Face (y0 + L5)
-            # Crank (45 degrees)
-            # Extend L10
-            
-            # Note: y0 passed to this function is the slab edge (face of beam if present)
-            beam_center_y = y0 - half
-            
-            # Polyline points
-            # Offset midx by offset_val
-            # Flip crank direction (-d_crank instead of +d_crank)
-            base_x = midx + offset_val
-            
-            pts = [
-                (base_x, beam_center_y),           # Start at beam center
-                (base_x, y0 + L5),                 # To L/5 mark (straight)
-                (base_x - d_crank, y0 + L5 + d_crank), # Crank 45 deg (Flipped: -d_crank)
-                (base_x - d_crank, y0 + L5 + d_crank + L10) # Continue L/10
-            ]
-            
-            w.add_polyline(pts, layer="REB_EK_MESNET")
-            ek_mid_y = (beam_center_y + y0 + L5 + d_crank + L10) / 2.0
-            w.add_text(base_x + 10, ek_mid_y, f"{ch_ek_start.label()}", height=100, layer="TEXT", rotation=90, center=True)
-            # _draw_dimension_line(w, ix1 + 80, y0, ix1 + 80, y0 + L5, "ln1/5", offset=40, layer="DIM")
+            L_ext = Ln_long / 5.0
+            offset_val = 800.0
+            _draw_support_extra_y(w, midx + offset_val, y0, bw_mm, ch_ek_start, L_ext, is_top=True)
         
         # Alt kenar (END) - sürekli ise
         if ch_ek_end and uzun_end_cont:
-            L5 = Ln_long / 5.0
-            L10 = Ln_long / 10.0
-            d_crank = 200.0
-            half = bw_mm / 2.0
+            L_ext = Ln_long / 5.0
             offset_val = 800.0
-            
-            beam_center_y = y1 + half
-            base_x = midx + offset_val
-            
-            # Polyline points (Going Up/Negative Y direction effectively for visual layout, but coordinates decrease)
-            # Flip crank direction (-d_crank instead of +d_crank)
-            pts = [
-                (base_x, beam_center_y),           # Start at beam center
-                (base_x, y1 - L5),                 # To L/5 mark
-                (base_x - d_crank, y1 - L5 - d_crank), # Crank (Flipped: -d_crank)
-                (base_x - d_crank, y1 - L5 - d_crank - L10) # Continue
-            ]
-            
-            w.add_polyline(pts, layer="REB_EK_MESNET")
-            ek_mid_y = (beam_center_y + y1 - L5 - d_crank - L10) / 2.0
-            w.add_text(base_x + 10, ek_mid_y, f"{ch_ek_end.label()}", height=100, layer="TEXT", rotation=90, center=True)
-            # _draw_dimension_line(w, ix1 + 80, y1 - L5, ix1 + 80, y1, "ln2/5", offset=40, layer="DIM")
+            _draw_support_extra_y(w, midx + offset_val, y1, bw_mm, ch_ek_end, L_ext, is_top=False)
     
     else:  # auto_dir == "Y"
         # auto_dir == "Y" → Ly < Lx → Y yönü kısa
@@ -726,51 +679,15 @@ def _draw_oneway_reinforcement_detail(
         
         # Sol kenar (START) - sürekli ise
         if ch_ek_start and uzun_start_cont:
-            L5 = Ln_long / 5.0
-            L10 = Ln_long / 10.0
-            d_crank = 200.0
-            half = bw_mm / 2.0
+            L_ext = Ln_long / 5.0
             offset_val = 800.0
-            
-            beam_center_x = x0 - half
-            base_y = midy + offset_val
-            
-            pts = [
-                (beam_center_x, base_y),           # Start at beam center
-                (x0 + L5, base_y),                 # To L/5 mark
-                (x0 + L5 + d_crank, base_y - d_crank), # Crank (Flipped: -d_crank)
-                (x0 + L5 + d_crank + L10, base_y - d_crank) # Continue
-            ]
-            
-            w.add_polyline(pts, layer="REB_EK_MESNET")
-            ek_mid_x = (beam_center_x + x0 + L5 + d_crank + L10) / 2.0
-            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_start.label()}", height=100, layer="TEXT", center=True)
-            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_start.label()}", height=100, layer="TEXT", center=True)
-            # _draw_dimension_line(w, x0, iy1 + 80, x0 + L5, iy1 + 80, "ln1/5", offset=40, layer="DIM")
+            _draw_support_extra_x(w, x0, midy + offset_val, bw_mm, ch_ek_start, L_ext, is_left=True)
         
         # Sağ kenar (END) - sürekli ise
         if ch_ek_end and uzun_end_cont:
-            L5 = Ln_long / 5.0
-            L10 = Ln_long / 10.0
-            d_crank = 200.0
-            half = bw_mm / 2.0
+            L_ext = Ln_long / 5.0
             offset_val = 800.0
-            
-            beam_center_x = x1 + half
-            base_y = midy + offset_val
-            
-            pts = [
-                (beam_center_x, base_y),           # Start at beam center
-                (x1 - L5, base_y),                 # To L/5 mark
-                (x1 - L5 - d_crank, base_y - d_crank), # Crank (Flipped: -d_crank)
-                (x1 - L5 - d_crank - L10, base_y - d_crank) # Continue
-            ]
-            
-            w.add_polyline(pts, layer="REB_EK_MESNET")
-            ek_mid_x = (beam_center_x + x1 - L5 - d_crank - L10) / 2.0
-            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_end.label()}", height=100, layer="TEXT", center=True)
-            w.add_text(ek_mid_x, base_y + 10, f"{ch_ek_end.label()}", height=100, layer="TEXT", center=True)
-            # _draw_dimension_line(w, x1 - L5, iy1 + 80, x1, iy1 + 80, "ln2/5", offset=40, layer="DIM")
+            _draw_support_extra_x(w, x1, midy + offset_val, bw_mm, ch_ek_end, L_ext, is_left=False)
     
     # Döşeme ID'si
     w.add_text(midx, midy, sid, height=150, layer="TEXT", center=True)
@@ -960,60 +877,593 @@ def export_to_dxf(system: SlabSystem, filename: str, design_cache: dict, bw_val:
             _draw_oneway_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm, slab_index=idx)
 
         elif kind == "TWOWAY":
-            cover = float(dcache.get("cover_mm", 25.0))
-            ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
-            if ix1 <= ix0 or iy1 <= iy0:
-                continue
-
-            midx = (ix0 + ix1) / 2.0
-            midy = (iy0 + iy1) / 2.0
-
-            chx = dcache["choices"].get("x_span")
-            chy = dcache["choices"].get("y_span")
-
-            if chx:
-                ptsx = _pilye_polyline(ix0, midy, ix1, midy, d=250.0, kink='both')
-                w.add_polyline(ptsx, layer="REB_MAIN_X")
-                # Etiket: orta noktadan 500mm sola
-                w.add_text(midx - 500, midy + 10, f"X {chx.label()}", height=125,
-                           layer="TEXT", center=True)
-
-            if chy:
-                ptsy = _pilye_polyline(midx, iy0, midx, iy1, d=250.0, kink='both')
-                w.add_polyline(ptsy, layer="REB_MAIN_Y")
-                # Etiket: orta noktadan 500mm sola, dikey yazı
-                w.add_text(midx - 500, midy, f"Y {chy.label()}", height=125,
-                           layer="TEXT", rotation=90, center=True)
+            _draw_twoway_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm, slab_index=idx, system=system)
 
         elif kind == "BALCONY":
-            cover = float(dcache.get("cover_mm", 25.0))
-            ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
-            if ix1 <= ix0 or iy1 <= iy0:
-                continue
-
-            midx = (ix0 + ix1) / 2.0
-            midy = (iy0 + iy1) / 2.0
-
-            ch_main = dcache["choices"].get("main")
-            ch_dist = dcache["choices"].get("dist")
-            fixed = dcache.get("fixed_edge", "L")
-
-            if ch_main:
-                if fixed in ("L", "R"):
-                    kink = "start" if fixed == "L" else "end"
-                    pts = _pilye_polyline(ix0, midy, ix1, midy, d=250.0, kink=kink)
-                    w.add_polyline(pts, layer="REB_SUPPORT")
-                    # Etiket: orta noktadan 500mm sola
-                    w.add_text(midx - 500, midy + 10, f"ana {ch_main.label()}",
-                               height=125, layer="TEXT", center=True)
-                    w.add_line(midx, iy0, midx, iy1, layer="REB_DIST")
-                else:
-                    kink = "end" if fixed == "T" else "start"
-                    pts = _pilye_polyline(midx, iy0, midx, iy1, d=250.0, kink=kink)
-                    w.add_polyline(pts, layer="REB_SUPPORT")
-                    # Etiket: orta noktadan 500mm sola, dikey yazı
-                    w.add_text(midx - 500, midy, f"ana {ch_main.label()}",
-                               height=125, layer="TEXT", rotation=90, center=True)
-                    w.add_line(ix0, midy, ix1, midy, layer="REB_DIST")
+            _draw_balcony_reinforcement_detail(w, sid, s, dcache, x0, y0, x1, y1, bw_mm)
 
     w.save(filename)
+
+
+def _draw_twoway_reinforcement_detail(
+    w: _DXFWriter,
+    sid: str,
+    s: Slab,
+    dcache: dict,
+    x0: float, y0: float, x1: float, y1: float,
+    bw_mm: float,
+    slab_index: int = 0,
+    system: "SlabSystem" = None
+):
+    """
+    Çift doğrultulu döşeme için detaylı donatı krokisi çizer.
+    Hem X hem Y yönünde ana donatı (düz + pilye) bulunur.
+    
+    YENİ DÜZEN (User Request):
+    - Paralel donatılar (Düz/Pilye) aynı hizada olmayacak.
+    - Aralarındaki mesafe donatı aralığı (s) kadar olacak.
+    - Yazılar üst üste gelmeyecek (Staggered layout).
+    - Kancalar çakışmayacak: Düz ve Pilye kancaları arasında 50mm fark olacak.
+    """
+    cover = float(dcache.get("cover_mm", 25.0))
+    choices = dcache.get("choices", {})
+    edge_cont = dcache.get("edge_continuity", {})
+
+    # İç sınırlar (pas payı düşülmüş)
+    ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
+    if ix1 <= ix0 or iy1 <= iy0:
+        return
+
+    Lx = ix1 - ix0
+    Ly = iy1 - iy0
+    midx = (ix0 + ix1) / 2.0
+    midy = (iy0 + iy1) / 2.0
+
+    # Süreklilik durumları (True=Sürekli, False=Süreksiz)
+    cont_L = edge_cont.get("L", False)
+    cont_R = edge_cont.get("R", False)
+    cont_T = edge_cont.get("T", False)
+    cont_B = edge_cont.get("B", False)
+
+    # Kanca uzunluğu (düz ve pilye için aynı kanca boyu)
+    hook_len = bw_mm - 30.0 
+    
+    # Kiriş içine uzama (Staggered)
+    # Pilye: bw - 30
+    beam_ext_pilye = bw_mm - 30.0
+    
+    # Düz: bw - 30 - 50 (50mm daha kısa/geride kalsın)
+    beam_ext_duz = bw_mm - 30.0 - 50.0
+
+    # =========================================================
+    # 1. X YÖNÜ DONATILARI (Yatay Çizilenler)
+    # =========================================================
+    ch_x_duz = choices.get("x_span_duz")
+    ch_x_pilye = choices.get("x_span_pilye")
+    ch_x_ek = choices.get("x_support_extra")
+
+    # Spacing hesapla (Offset için)
+    # Düz ve Pilye arası mesafe 's' kadar olsun. 
+    # O zaman merkezden +s/2 ve -s/2 öteleyelim.
+    sx = ch_x_pilye.s_mm if ch_x_pilye else 200.0
+    if ch_x_duz: sx = ch_x_duz.s_mm
+    
+    # Y koordinatları: Pilye üstte (+), Düz altta (-)
+    y_pilye_x = midy + (sx / 2.0)
+    y_duz_x = midy - (sx / 2.0)
+
+    # Text Offset (Staggered)
+    # X donatısı metinleri yatay çizginin üstünde/altında olur.
+    # Çakışmayı önlemek için X ekseninde de kaydıralım.
+    # Pilye Yazısı: Sola kayık, Çizgi üstü
+    # Düz Yazısı: Sağa kayık, Çizgi altı
+    text_shift_x = Lx * 0.25  # Çeyrek açıklık kadar kaydır
+
+    # X Yönü Düz Donatı
+    if ch_x_duz:
+        pts = []
+        # Sol (L)
+        if cont_L:
+            pts.append((x0 - beam_ext_duz, y_duz_x))
+        else:
+            # Süreksiz: Kanca YUKARI (Düz donatı altta)
+            pts.append((x0 - beam_ext_duz, y_duz_x + hook_len)) 
+            pts.append((x0 - beam_ext_duz, y_duz_x))            
+        
+        # Sağ (R)
+        if cont_R:
+            pts.append((x1 + beam_ext_duz, y_duz_x))
+        else:
+            # Süreksiz: Kanca YUKARI
+            pts.append((x1 + beam_ext_duz, y_duz_x))            
+            pts.append((x1 + beam_ext_duz, y_duz_x + hook_len)) 
+
+        w.add_polyline(pts, layer="REB_DUZ")
+        # Label: Center + shift Right, Below line
+        w.add_text(midx + text_shift_x, y_duz_x - 30, f"X düz {ch_x_duz.label()}", height=100, layer="TEXT", center=True)
+
+    # X Yönü Pilye Donatı
+    if ch_x_pilye:
+        # Pilye kancaları: Pilye (üst), süreksiz kenarda kanca AŞAĞI.
+        pts = _pilye_polyline(x0, y_pilye_x, x1, y_pilye_x, d=200.0, kink="both", hook_len=hook_len, beam_ext=beam_ext_pilye)
+        w.add_polyline(pts, layer="REB_PILYE")
+        # Label: Center - shift Left, Above line
+        w.add_text(midx - text_shift_x, y_pilye_x + 30, f"X pilye {ch_x_pilye.label()}", height=100, layer="TEXT", center=True)
+
+    # X Yönü Mesnet Ek
+    if ch_x_ek:
+        # Mesnet ekleri: SADECE SAĞ (R) KENARDA ÇİZİLİR (Süreklilik varsa)
+        # Sol (L) kenar için, sol komşu (kendi R kenarı için) çizecek.
+        
+        # Sağ (R) - Eğer sürekliyse
+        if cont_R:
+             # Sağ Komşuyu bul
+            neighbor_id, neighbor_kind = _get_neighbor_id_on_edge(system, sid, "R")
+            
+            # Mesafeler
+            # Kendi tarafım (Sol tarafı çizimin): Ln/5
+            L_ext_self = Lx / 5.0
+            
+            # Komşu tarafı (Sağ tarafı çizimin): Ln_neighbor / 5
+            # Eğer komşu yoksa veya balcony ise?
+            # Balcony ise, balkonun L_net'i yoktur (genelde 1.5m vs).
+            # Güvenli olarak L_ext_self kullan.
+            L_ext_neigh = L_ext_self
+            
+            if neighbor_id and system:
+                try:
+                    # Komşunun Lx değerini al
+                    # twoway_net_LxLy(sid, bw) -> returns Lx_n, Ly_n, steps
+                    # Ancak bu fonksiyon system.slabs[sid] gerektirir.
+                    # Komşu Oneway de olabilir Twoway de.
+                    # Basitçe bounding box'tan brüt alıp bw düşelim.
+                    # Veya system.slabs[neighbor_id].size_m_gross()
+                    ns = system.slabs[neighbor_id]
+                    nLx_g, _ = ns.size_m_gross()
+                    # Net yaklaşık Brüt - bw
+                    nLx = (nLx_g * 1000.0) - bw_mm 
+                    if nLx > 0:
+                        L_ext_neigh = nLx / 5.0
+                except:
+                    pass
+            
+            # Hat Çiz
+            # Merkez: x1 + bw/2 (Sağ kirişin ortası)
+            cx = x1 + (bw_mm / 2.0)
+            cy = midy + 800 # Y konumu
+            
+            _draw_hat_bar(w, cx, cy, bw_mm, ch_x_ek, 
+                          L_ext_left=L_ext_self, L_ext_right=L_ext_neigh, 
+                          axis="X")
+
+
+    # =========================================================
+    # 2. Y YÖNÜ DONATILARI (Dikey Çizilenler)
+    # =========================================================
+    ch_y_duz = choices.get("y_span_duz")
+    ch_y_pilye = choices.get("y_span_pilye")
+    ch_y_ek = choices.get("y_support_extra")
+
+    # Spacing
+    sy = ch_y_pilye.s_mm if ch_y_pilye else 200.0
+    if ch_y_duz: sy = ch_y_duz.s_mm
+
+    # X koordinatları (Dikey çizgiler için)
+    # Pilye Sağda (+), Düz Solda (-)
+    x_pilye_y = midx + (sy / 2.0)
+    x_duz_y = midx - (sy / 2.0)
+
+    # Text Offset (Staggered via Y axis)
+    # Pilye Yazısı: Yukarı kayık, Çizgi Sağı
+    # Düz Yazısı: Aşağı kayık, Çizgi Solu
+    text_shift_y = Ly * 0.25
+
+    # Y Yönü Düz Donatı
+    if ch_y_duz:
+        pts = []
+        # Üst (T)
+        if cont_T:
+            pts.append((x_duz_y, y0 - beam_ext_duz))
+        else:
+            # Süreksiz: Kanca İÇE (SOLA)
+            pts.append((x_duz_y - hook_len, y0 - beam_ext_duz))
+            pts.append((x_duz_y, y0 - beam_ext_duz))
+        
+        # Alt (B)
+        if cont_B:
+            pts.append((x_duz_y, y1 + beam_ext_duz))
+        else:
+            pts.append((x_duz_y, y1 + beam_ext_duz))
+            pts.append((x_duz_y - hook_len, y1 + beam_ext_duz))
+
+        w.add_polyline(pts, layer="REB_DUZ")
+        # Label: Center - shift Down, Left of line (Rotated 90)
+        w.add_text(x_duz_y - 30, midy - text_shift_y, f"Y düz {ch_y_duz.label()}", height=100, layer="TEXT", rotation=90, center=True)
+
+    # Y Yönü Pilye Donatı
+    if ch_y_pilye:
+        pts = _pilye_polyline(x_pilye_y, y0, x_pilye_y, y1, d=200.0, kink="both", hook_len=hook_len, beam_ext=beam_ext_pilye)
+        w.add_polyline(pts, layer="REB_PILYE")
+        # Label: Center + shift Up, Right of line
+        w.add_text(x_pilye_y + 60, midy + text_shift_y, f"Y pilye {ch_y_pilye.label()}", height=100, layer="TEXT", rotation=90, center=True)
+
+    # Y Yönü Mesnet Ek
+    if ch_y_ek:
+        # Sadece ALT (B) Kenarda Çiz
+        
+        # Alt (B) - Eğer sürekliyse
+        if cont_B:
+            # Alt Komşuyu bul
+            neighbor_id, neighbor_kind = _get_neighbor_id_on_edge(system, sid, "B")
+            
+            L_ext_self = Ly / 5.0
+            L_ext_neigh = L_ext_self
+            
+            if neighbor_id and system:
+                try:
+                    ns = system.slabs[neighbor_id]
+                    _, nLy_g = ns.size_m_gross()
+                    nLy = (nLy_g * 1000.0) - bw_mm
+                    if nLy > 0:
+                        L_ext_neigh = nLy / 5.0
+                except:
+                    pass
+            
+            # Hat Çiz
+            # Merkez: y1 + bw/2 (Alt kirişin ortası)
+            cx = midx - 800
+            cy = y1 + (bw_mm / 2.0)
+            
+            # Axis Y:
+            # L_ext_left -> correspond to Top (Self) -> negative Y relative to center?
+            # Wait, _draw_hat_bar axis="Y":
+            # Left arg -> Top (Negative Y direction from center? No, usually Top is Y0 < Y1)
+            # Let's define: Left=Top(Negative/Smaller Y in GUI?), Right=Bottom(Positive/Larger Y)
+            # In standard Math (Y up): Top is larger Y.
+            # In our GUI (Y down): Top is smaller Y (y0).
+            # Let's verify _draw_hat_bar implementation details below.
+            
+            _draw_hat_bar(w, cx, cy, bw_mm, ch_y_ek, 
+                          L_ext_left=L_ext_self, L_ext_right=L_ext_neigh, 
+                          axis="Y")
+
+    w.add_text(midx, midy, sid, height=150, layer="TEXT", center=True)
+
+
+def _draw_support_extra_x(w, x_ref, y_ref, bw_mm, choice, L_ext, is_left=True):
+    """
+    Mesnet Ek Donatısı (Yatay): 
+    - Kiriş merkezinden başlar (veya komşudan gelir).
+    - Kiriş yüzünden L_ext kadar içeri girer.
+    - Uçta aşağı doğru kanca yapar.
+    """
+    hook_len = 100.0
+    half = bw_mm / 2.0
+    
+    # x_ref: Kiriş YÜZÜ (Face) - veya sınır
+    # Ancak OneWay fonksiyonu x_ref olarak bazen ortayı gönderiyor olabilir. 
+    # Parametrelerin tutarlılığı için:
+    # Bu fonksiyonda x_ref = Kiriş YÜZÜ (Döşeme Kenarı) varsayalım.
+    # Ve beam_center buna göre hesaplansın.
+    
+    # DÜZELTME: Mevcut kodda çağrılan yerler:
+    # TwoWay: x0 (Sol Face), x1 (Sağ Face) gönderiliyor.
+    # OneWay: beam_center_x gönderiliyor olabilir mi? 
+    # OneWay koduna bakalım: 
+    #   beam_center_x = x0 - half; _draw_support_extra_x(..., beam_center_x? HAYIR)
+    #   OneWay draw: pts = [... beam_center_x ...] kendisi çiziyor.
+    #   OneWay, _draw_support_extra_x KULLANMIYOR. Kendisi polyline oluşturuyor.
+    #   Sadece TwoWay kullanıyor. O yüzden rahatız.
+    
+    # TwoWay çağrısı: x_ref = x0 (Sol Kenar/Yüz) veya x1 (Sağ Kenar/Yüz)
+    
+    pts = []
+    if is_left:
+        # Sol kenar (x_ref = x0)
+        # Donatı: Sol komşudan gelmeli (biz çiziyoruz), sağa uzamalı (bizim içimize).
+        # Başlangıç: Kirişin diğer tarafı veya ortası?
+        # Genelde süreklilik donatısı simetriktir. Kiriş ekseninden L_ext kadar her iki yana.
+        # Biz sadece yarısını (bizim taraftakini) çiziyoruz gibi düşünebiliriz ama
+        # çizimde bütünlük olması için kiriş ekseninden başlatıp bizim tarafa uzatmak mantıklı.
+        
+        x_beam_center = x_ref - half
+        # Ancak komşu tarafını komşu çizecek. Biz sadece bizim tarafı çizelim?
+        # User talebi: "iki döşemeye de kirişten itibaren Ln/5 kadar uzayacak"
+        # Bu demek ki, her döşeme kendi tarafındaki Ln/5'i çizerse, ve bunlar birleşirse?
+        # Veya tek bir çizgi mi olmalı?
+        # Kiriş ortasından bölerek çizmek mantıklı.
+        
+        pts = [
+            (x_beam_center, y_ref),           # Start at Beam Center
+            (x_ref + L_ext, y_ref),           # Extend into slab (Ln/5)
+            (x_ref + L_ext, y_ref - hook_len) # Hook Down
+        ]
+    else:
+        # Sağ kenar (x_ref = x1)
+        x_beam_center = x_ref + half
+        
+        pts = [
+            (x_beam_center, y_ref),           # Start at Beam Center
+            (x_ref - L_ext, y_ref),           # Extend into slab (Ln/5)
+            (x_ref - L_ext, y_ref - hook_len) # Hook Down
+        ]
+    
+    w.add_polyline(pts, layer="REB_EK_MESNET")
+    # Label
+    lbl_x = x_ref + (L_ext/2.0) if is_left else x_ref - (L_ext/2.0)
+    w.add_text(lbl_x, y_ref + 20, f"Ek {choice.label()}", height=80, layer="TEXT", center=True)
+
+
+def _draw_support_extra_y(w, x_ref, y_ref, bw_mm, choice, L_ext, is_top=True):
+    """
+    Mesnet Ek Donatısı (Dikey)
+    """
+    hook_len = 100.0
+    half = bw_mm / 2.0
+    
+    pts = []
+    if is_top:
+        # Üst kenar (y_ref = y0)
+        y_beam_center = y_ref - half
+        
+        pts = [
+            (x_ref, y_beam_center),           # Start at Beam Center
+            (x_ref, y_ref + L_ext),           # Extend Down into slab
+            (x_ref - hook_len, y_ref + L_ext) # Hook Left (or Right?) - Standard Left for vertical
+        ]
+    else:
+        # Alt kenar (y_ref = y1)
+        y_beam_center = y_ref + half
+        
+        pts = [
+            (x_ref, y_beam_center),           # Start at Beam Center
+            (x_ref, y_ref - L_ext),           # Extend Up into slab
+            (x_ref - hook_len, y_ref - L_ext) # Hook Left
+        ]
+    
+    w.add_polyline(pts, layer="REB_EK_MESNET")
+    lbl_y = y_ref + (L_ext/2.0) if is_top else y_ref - (L_ext/2.0)
+    w.add_text(x_ref + 20, lbl_y, f"Ek {choice.label()}", height=80, layer="TEXT", rotation=90, center=True)
+
+
+
+def _draw_balcony_reinforcement_detail(
+    w: _DXFWriter,
+    sid: str,
+    s: Slab,
+    dcache: dict,
+    x0: float, y0: float, x1: float, y1: float,
+    bw_mm: float
+):
+    """
+    Balkon donatısı:
+    - Mesnet (sabit) kenarda komşuya uzanır (üst donatı).
+    - Serbest kenarda kanca yapar (AŞAĞI).
+    - Dağıtma donatısı diğer yönde.
+    """
+    cover = float(dcache.get("cover_mm", 25.0))
+    ix0, iy0, ix1, iy1 = x0 + cover, y0 + cover, x1 - cover, y1 - cover
+    midx = (ix0 + ix1) / 2.0
+    midy = (iy0 + iy1) / 2.0
+    
+    choices = dcache.get("choices", {})
+    ch_main = choices.get("main")
+    ch_dist = choices.get("dist")
+    fixed = dcache.get("fixed_edge", "L") # Hangi kenar ankastre (bina tarafı)
+
+    beam_ext = bw_mm - 30.0
+    hook_len = bw_mm - 30.0
+    L_anchor = 1000.0 # Komşuya uzama boyu (temsili)
+
+    # 1. ANA DONATI (ÜST)
+    if ch_main:
+        pts = []
+        layer = "REB_SUPPORT"
+        lbl_rot = 0
+        lbl_pos = (midx, midy)
+
+        if fixed == "L":
+            # Sol taraf sabit, Sağ taraf serbest
+            # Solda komşuya uzan (düz)
+            # Sağda kanca AŞAĞI
+            y_pos = midy
+            pts.append((x0 - L_anchor, y_pos)) # Komşu içi
+            pts.append((x1 + beam_ext, y_pos)) # Sağ uç (kiriş/döşeme ucu)
+            pts.append((x1 + beam_ext, y_pos + hook_len)) # Kanca AŞAĞI (Y artıyor -> ekran koordinatında aşağı)
+            
+            w.add_polyline(pts, layer=layer)
+            w.add_text(midx, y_pos - 20, f"Ana {ch_main.label()}", height=100, layer="TEXT", center=True)
+            
+            # Dağıtma (Dikey)
+            if ch_dist:
+                count = 3
+                dx = (x1 - x0) / (count + 1)
+                for i in range(1, count + 1):
+                    xi = x0 + i * dx
+                    # Düz çubuk
+                    w.add_line(xi, iy0, xi, iy1, layer="REB_DIST")
+                w.add_text(midx, midy + 100, f"Dağ. {ch_dist.label()}", height=80, layer="TEXT", center=True)
+
+        elif fixed == "R":
+            # Sağ taraf sabit, Sol taraf serbest
+            y_pos = midy
+            pts.append((x1 + L_anchor, y_pos)) # Komşu içi
+            pts.append((x0 - beam_ext, y_pos)) # Sol uç
+            pts.append((x0 - beam_ext, y_pos + hook_len)) # Kanca AŞAĞI
+            
+            w.add_polyline(pts, layer=layer)
+            w.add_text(midx, y_pos - 20, f"Ana {ch_main.label()}", height=100, layer="TEXT", center=True)
+             # Dağıtma (Dikey)
+            if ch_dist:
+                count = 3
+                dx = (x1 - x0) / (count + 1)
+                for i in range(1, count + 1):
+                    xi = x0 + i * dx
+                    w.add_line(xi, iy0, xi, iy1, layer="REB_DIST")
+
+        elif fixed == "T":
+            # Üst taraf sabit, Alt taraf serbest
+            x_pos = midx
+            pts.append((x_pos, y0 - L_anchor)) # Komşu içi (Yukarı)
+            pts.append((x_pos, y1 + beam_ext)) # Alt uç
+            # Vertical çizimde kanca "Sağa" kıvrılsın (Aşağı temsili)
+            pts.append((x_pos + hook_len, y1 + beam_ext)) 
+            
+            w.add_polyline(pts, layer=layer)
+            w.add_text(x_pos + 20, midy, f"Ana {ch_main.label()}", height=100, layer="TEXT", rotation=90, center=True)
+
+            # Dağıtma (Yatay)
+            if ch_dist:
+                count = 3
+                dy = (y1 - y0) / (count + 1)
+                for i in range(1, count + 1):
+                    yi = y0 + i * dy
+                    w.add_line(ix0, yi, ix1, yi, layer="REB_DIST")
+
+        elif fixed == "B":
+            # Alt taraf sabit, Üst taraf serbest
+            x_pos = midx
+            pts.append((x_pos, y1 + L_anchor)) # Komşu içi (Aşağı)
+            pts.append((x_pos, y0 - beam_ext)) # Üst uç
+            pts.append((x_pos + hook_len, y0 - beam_ext)) # Kanca "Sağa"
+            
+            w.add_polyline(pts, layer=layer)
+            w.add_text(x_pos + 20, midy, f"Ana {ch_main.label()}", height=100, layer="TEXT", rotation=90, center=True)
+
+             # Dağıtma (Yatay)
+            if ch_dist:
+                count = 3
+                dy = (y1 - y0) / (count + 1)
+                for i in range(1, count + 1):
+                    yi = y0 + i * dy
+                    w.add_line(ix0, yi, ix1, yi, layer="REB_DIST")
+
+    w.add_text(midx, midy, sid, height=150, layer="TEXT", center=True)
+
+
+def _get_neighbor_id_on_edge(system, sid, edge):
+    """Yardımcı: Belirtilen kenardaki komşunun ID'sini döndürür."""
+    if not system: return None, None
+    try:
+        # twoway_slab.get_neighbor_on_edge_twoway fonksiyonunu kullanabiliriz
+        # ama o fonksiyon sistem importu gerektirir.
+        # Burada manuel yapalım veya sistemi kullanalım.
+        # system.cell_owner vs.
+        neigh_set = system.neighbor_slabs_on_side(sid, "X" if edge in "LR" else "Y", "START" if edge in "LT" else "END")
+        # Genelde 1 komşu vardır ama set döner. İlkini alalım.
+        if neigh_set:
+            nid = list(neigh_set)[0]
+            nkind = system.slabs[nid].kind
+            return nid, nkind
+    except:
+        pass
+    return None, None
+
+
+def _draw_hat_bar(w, cx, cy, bw_mm, choice, L_ext_left, L_ext_right, axis="X"):
+    """
+    Hat (Pilye) Şeklinde Mesnet Ek Donatısı Çizer.
+    
+    Tasarım:
+    - Merkez (cx, cy) kiriş ekseni üzerindedir.
+    - Donatı, kirişin soluna/üstüne ve sağına/altına doğru uzanır.
+    - Şekil:
+      - Sol/Üst Kuyruk (Tail)
+      - Sol/Üst Kırılma (Crank Up)
+      - Sol/Üst Düz (Top - beam üstü)
+      - Sağ/Alt Düz (Top)
+      - Sağ/Alt Kırılma (Crank Down)
+      - Sağ/Alt Kuyruk (Tail)
+    
+    Parametreler:
+    - L_ext_left: Sol/Üst döşemedeki DÜZ kısmın uzunluğu (Lb/5)
+    - L_ext_right: Sağ/Alt döşemedeki DÜZ kısmın uzunluğu (Ln/5)
+    - Kuyruklar: Lb/4 kadar uzatılır (sabit kabul veya parametrik).
+    - d_crank: Kırılma yüksekliği (200mm)
+    """
+    
+    d = 200.0  # Crank height/depth
+    tail_factor = 1.25 # Tail = 1.25 * L_ext (approx Ln/4 if L_ext=Ln/5)
+    # Ln/5 * 1.25 = Ln/4. Correct.
+    
+    tail_left = L_ext_left * tail_factor
+    tail_right = L_ext_right * tail_factor
+    
+    half = bw_mm / 2.0
+    
+    # Koordinatlar (Merkeze göre)
+    # Sol taraf (Left/Top)
+    # Düz kısım bitişi (Start of Crank): Center - half - L_ext_left
+    # Kuyruk başlangıcı (End of Crank): Start_Crank - d
+    # Kuyruk ucu: End_Crank - tail_left
+    
+    pts = []
+    
+    if axis == "X":
+        # Yatay Çizim
+        # Sol Taraf
+        x_flat_start = cx - half - L_ext_left
+        x_crank_end = x_flat_start - d
+        x_tail_end = x_crank_end - tail_left
+        
+        # Sağ Taraf
+        x_flat_end = cx + half + L_ext_right
+        x_crank_start_R = x_flat_end + d
+        x_tail_end_R = x_crank_start_R + tail_right
+        
+        # Y koordinatları
+        # Üst (Flat kısım): cy (veya cy + offset?) -> Merkezde olsun
+        # Alt (Kuyruklar): cy - d (Aşağı kırılma) - User isteği: 45 derece
+        
+        # Noktalar (Soldan Sağa)
+        pts.append((x_tail_end, cy - d))        # Sol Kuyruk Ucu
+        pts.append((x_crank_end, cy - d))       # Sol Kırılma Alt
+        pts.append((x_flat_start, cy))          # Sol Kırılma Üst
+        pts.append((x_flat_end, cy))            # Sağ Kırılma Üst
+        pts.append((x_crank_start_R, cy - d))   # Sağ Kırılma Alt
+        pts.append((x_tail_end_R, cy - d))      # Sağ Kuyruk Ucu
+        
+        # Layer
+        w.add_polyline(pts, layer="REB_EK_MESNET")
+        
+        # Text
+        w.add_text(cx, cy + 30, f"Ek {choice.label()}", height=100, layer="TEXT", center=True)
+        # Boyut çizgisi eklenebilir
+        
+    else: # Axis Y (Dikey)
+        # Dikey Çizim (Y-axis down in GUI, but let's think logic)
+        # Left arg -> Top (Smaller Y)
+        # Right arg -> Bottom (Larger Y)
+        
+        # Üst Taraf (Top / Negative rel to center)
+        y_flat_start = cy - half - L_ext_left
+        y_crank_end = y_flat_start - d
+        y_tail_end = y_crank_end - tail_left
+        
+        # Alt Taraf (Bottom / Positive rel to center)
+        y_flat_end = cy + half + L_ext_right
+        y_crank_start_B = y_flat_end + d
+        y_tail_end_B = y_crank_start_B + tail_right
+        
+        # X koordinatları
+        # Flat (Center): cx
+        # Tail (Offset): cx - d (Sola kırılma? veya Sağa?)
+        # Genelde pilye görünüşü: Kesit gibi.
+        # Plan görünüşte: Pilye yatırılır.
+        # Dikey donatı pilyesi X yönünde kırılır.
+        # Sağa mı sola mı? 
+        # Standart: Sağa kır (cx + d)
+        
+        x_main = cx
+        x_shifted = cx + d # Sağa kırılmış hali (altta kalan kısım)
+        
+        # Noktalar (Üstten Alta)
+        pts.append((x_shifted, y_tail_end))      # Üst Kuyruk Ucu
+        pts.append((x_shifted, y_crank_end))     # Üst Kırılma Alt
+        pts.append((x_main, y_flat_start))       # Üst Kırılma Üst
+        pts.append((x_main, y_flat_end))         # Alt Kırılma Üst
+        pts.append((x_shifted, y_crank_start_B)) # Alt Kırılma Alt
+        pts.append((x_shifted, y_tail_end_B))    # Alt Kuyruk Ucu
+        
+        w.add_polyline(pts, layer="REB_EK_MESNET")
+        w.add_text(x_main - 30, cy, f"Ek {choice.label()}", height=100, layer="TEXT", rotation=90, center=True)
